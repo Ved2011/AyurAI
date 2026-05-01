@@ -1,0 +1,89 @@
+{
+  "theme": "LIGHT",
+  "archetype": "1_ORGANIC_EARTHY",
+  "design_philosophy": "Earthy, grounded, and calming. The design prioritizes organic shapes, generous spacing, and a tactile feel to evoke trust and natural wellness.",
+  "colors": {
+    "background": "#F9F6F0",
+    "surface": "#FFFFFF",
+    "surface_secondary": "#ECEDE8",
+    "text_primary": "#2C362F",
+    "text_secondary": "#5C6B61",
+    "primary": "#4A7C59",
+    "primary_hover": "#3B6347",
+    "accent_vata": "#D4A373",
+    "accent_pitta": "#C8624C",
+    "accent_kapha": "#4A7C59",
+    "border": "#E2E4DF",
+    "error": "#B74F3F"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "'Cormorant Garamond', serif",
+      "body": "'Manrope', sans-serif"
+    },
+    "scale": {
+      "h1": "text-5xl md:text-6xl tracking-tight leading-none",
+      "h2": "text-3xl md:text-4xl tracking-tight",
+      "h3": "text-2xl",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm tracking-wide"
+    }
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-6 md:p-12 lg:p-16",
+    "grid_strategy": "The 'Bento' Grid for results, single-column max-w-3xl centralized for the form to ensure focus.",
+    "border_radius": "rounded-2xl for main cards, rounded-full for symptom pills/chips."
+  },
+  "components": {
+    "hero": {
+      "style": "Asymmetric text alignment, overlapping organic imagery, subtle texture background."
+    },
+    "dosha_analyzer_form": {
+      "inputs": "Shadcn components customized. Use flat solid backgrounds for inputs with 1px earthy borders.",
+      "multi_select_symptoms": "Pill-shaped toggle chips (rounded-full). Unselected: surface_secondary + border. Selected: primary background + white text.",
+      "lifestyle_radio": "Segmented control style, full width, rounded-xl."
+    },
+    "results_card": {
+      "style": "Clay & Crisp Neumorphism. Background matches parent but has soft ambient shadow and 1px sharp border. Highlight the dominant dosha color."
+    },
+    "buttons": {
+      "primary": "Solid #4A7C59, rounded-full, px-8 py-3, subtle hover lift (-translate-y-1) and shadow-lg.",
+      "secondary": "Outline, text_primary, border-border, rounded-full."
+    }
+  },
+  "motion": {
+    "page_load": "Fade in, slightly stagger children. 0.6s duration, ease-out.",
+    "hover": "Buttons and cards lift slightly up (-translate-y-1).",
+    "form_submit": "Smooth transition to results using AnimatePresence from Framer Motion."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1673203457013-6fbad33bd9b8",
+        "category": "hero_background",
+        "description": "Sand dune wavy lines, use as a very subtle, low-opacity (10-20%) textured background overlay or split hero image."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1708667027894-6e9481ae1baf",
+        "category": "about_ayurveda",
+        "description": "Close up of fresh green plant, represents herbs and natural healing. Use in the About section."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1764616683131-862865b9bcf7",
+        "category": "balance_nature",
+        "description": "Ripples on water at sunset. Can be used in the Dosha or lifestyle advice section as an ambient image."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure all interactive elements have data-testid attributes.",
+    "Use pure HTML/Tailwind for the Hero section, avoiding standard Shadcn cards there to keep it creative.",
+    "Use Shadcn UI for the form inputs, but heavily customize them to remove the default 'Vercel' look (e.g., soften borders, use earthy colors, rounded-full for pills).",
+    "Implement the symptoms as a flex-wrap container of interactive toggle pills.",
+    "Add 'lucide-react' for icons (e.g., Leaf, Wind, Flame, Droplet).",
+    "Do not use generic 'Inter' font. Import Cormorant Garamond and Manrope from Google Fonts in index.css.",
+    "Avoid using full transparent headers over images; use a solid #F9F6F0 header or slightly transparent glass with blur.",
+    "For the results history, map over the saved items and display them in a clean list or small bento grid.",
+    "Remember to use .js files for React components, not .tsx as per project requirements."
+  ]
+}
