@@ -108,6 +108,125 @@ DOSHA_INFO: Dict[str, Dict] = {
 }
 
 
+# ---------- Prakriti Quiz (20 classical questions) ----------
+PRAKRITI_QUESTIONS = [
+    ("body_frame", "Body frame",
+     [("vata", "Thin, lean, hard to gain weight"),
+      ("pitta", "Medium, muscular, well-proportioned"),
+      ("kapha", "Large, sturdy, gains weight easily")]),
+    ("weight_pattern", "Weight pattern",
+     [("vata", "Light — fluctuates easily"),
+      ("pitta", "Moderate — stable with effort"),
+      ("kapha", "Heavy — gains quickly, loses slowly")]),
+    ("skin", "Skin",
+     [("vata", "Dry, rough, cool, thin"),
+      ("pitta", "Warm, reddish, sensitive, freckles/moles"),
+      ("kapha", "Soft, oily, thick, pale, smooth")]),
+    ("hair", "Hair",
+     [("vata", "Dry, frizzy, brittle, thin"),
+      ("pitta", "Fine, soft, early graying or balding"),
+      ("kapha", "Thick, oily, wavy, lustrous")]),
+    ("eyes", "Eyes",
+     [("vata", "Small, dry, active, dark"),
+      ("pitta", "Medium, sharp, penetrating"),
+      ("kapha", "Large, calm, moist, attractive")]),
+    ("teeth", "Teeth",
+     [("vata", "Uneven, gums recede, often sensitive"),
+      ("pitta", "Medium-sized, yellowish, prone to bleeding gums"),
+      ("kapha", "Large, white, strong, well-formed")]),
+    ("appetite", "Appetite",
+     [("vata", "Irregular — sometimes hungry, sometimes not"),
+      ("pitta", "Strong — intense hunger, gets irritable if skipped"),
+      ("kapha", "Slow but steady — can easily skip meals")]),
+    ("thirst", "Thirst",
+     [("vata", "Variable"),
+      ("pitta", "High — always reaching for water"),
+      ("kapha", "Low — rarely thirsty")]),
+    ("digestion", "Digestion",
+     [("vata", "Irregular, gas, bloating"),
+      ("pitta", "Strong, quick, occasional heartburn"),
+      ("kapha", "Slow, heavy after meals")]),
+    ("sleep", "Sleep",
+     [("vata", "Light, interrupted, 5–6 hours"),
+      ("pitta", "Moderate, sound, 6–8 hours"),
+      ("kapha", "Deep, heavy, 8+ hours, hard to wake")]),
+    ("energy", "Energy pattern",
+     [("vata", "Bursts of energy then fatigue"),
+      ("pitta", "Moderate, focused, goal-driven"),
+      ("kapha", "Steady, strong, enduring")]),
+    ("speed", "Speed of action",
+     [("vata", "Fast, restless, hurried"),
+      ("pitta", "Medium, purposeful, sharp"),
+      ("kapha", "Slow, methodical, graceful")]),
+    ("memory", "Memory",
+     [("vata", "Learns quickly, forgets quickly"),
+      ("pitta", "Sharp and accurate"),
+      ("kapha", "Slow to learn, excellent long-term recall")]),
+    ("stress_response", "Under stress I feel",
+     [("vata", "Anxious, worried, scattered"),
+      ("pitta", "Angry, irritable, critical"),
+      ("kapha", "Withdrawn, quiet, calm")]),
+    ("mind", "Mind",
+     [("vata", "Creative, imaginative, restless"),
+      ("pitta", "Intelligent, analytical, decisive"),
+      ("kapha", "Steady, grounded, thoughtful")]),
+    ("sweat", "Sweat",
+     [("vata", "Minimal, even in heat"),
+      ("pitta", "Profuse, often with strong odor"),
+      ("kapha", "Moderate, pleasant")]),
+    ("voice", "Voice / speech",
+     [("vata", "Fast, variable, talkative"),
+      ("pitta", "Sharp, clear, convincing"),
+      ("kapha", "Deep, slow, melodious")]),
+    ("body_temperature", "Body temperature",
+     [("vata", "Usually cold — cold hands and feet"),
+      ("pitta", "Usually warm — seeks cool places"),
+      ("kapha", "Cool and moist — adapts well")]),
+    ("decisions", "Decision making",
+     [("vata", "Changes mind often, indecisive"),
+      ("pitta", "Decisive, quick, firm"),
+      ("kapha", "Reflective, slow, thorough")]),
+    ("money", "Money habits",
+     [("vata", "Spends impulsively, on small things"),
+      ("pitta", "Spends on luxury and quality"),
+      ("kapha", "Saves carefully, resists spending")]),
+]
+
+
+def analyze_prakriti(answers: Dict[str, str], age: int = 30) -> Dict:
+    """Analyze Prakriti quiz answers. Each answer is a dosha ('vata'|'pitta'|'kapha')."""
+    scores = {"vata": 0, "pitta": 0, "kapha": 0}
+    valid_ids = {qid for qid, _, _ in PRAKRITI_QUESTIONS}
+    for qid, dosha in answers.items():
+        if qid in valid_ids and dosha in scores:
+            scores[dosha] += 1
+
+    # Age-stage light touch (+1) so it blends with quick-read
+    if age < 25:
+        scores["kapha"] += 1
+    elif age <= 55:
+        scores["pitta"] += 1
+    else:
+        scores["vata"] += 1
+
+    dominant = max(scores, key=lambda k: (scores[k], -["vata", "pitta", "kapha"].index(k)))
+    info = DOSHA_INFO[dominant]
+    total = sum(scores.values()) or 1
+    percentages = {k: round((v / total) * 100) for k, v in scores.items()}
+
+    return {
+        "dosha": dominant,
+        "dosha_name": info["name"],
+        "element": info["element"],
+        "tagline": info["tagline"],
+        "description": info["description"],
+        "herbs": info["herbs"],
+        "lifestyle_advice": info["lifestyle_advice"],
+        "scores": scores,
+        "percentages": percentages,
+    }
+
+
 def analyze_dosha(age: int, symptoms: List[str], lifestyle: str) -> Dict:
     """Pure rule-based dosha analysis — returns scores, dominant dosha + recommendations."""
     scores = {"vata": 0, "pitta": 0, "kapha": 0}
@@ -158,12 +277,18 @@ class AnalyzeRequest(BaseModel):
     lifestyle: str
 
 
+class QuizAnalyzeRequest(BaseModel):
+    answers: Dict[str, str]
+    age: int = Field(default=30, ge=1, le=120)
+
+
 class AnalysisRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    mode: str = "quick"  # 'quick' or 'quiz'
     age: int
-    symptoms: List[str]
-    lifestyle: str
+    symptoms: List[str] = Field(default_factory=list)
+    lifestyle: str = ""
     dosha: str
     dosha_name: str
     element: str
@@ -190,6 +315,7 @@ async def analyze(payload: AnalyzeRequest):
     result = analyze_dosha(payload.age, payload.symptoms, payload.lifestyle)
 
     record = AnalysisRecord(
+        mode="quick",
         age=payload.age,
         symptoms=payload.symptoms,
         lifestyle=payload.lifestyle,
@@ -218,6 +344,44 @@ async def delete_history(record_id: str):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Record not found")
     return {"deleted": record_id}
+
+
+@api_router.get("/quiz")
+async def quiz_questions():
+    """Returns the 20 Prakriti questions for the deep quiz."""
+    return {
+        "questions": [
+            {
+                "id": qid,
+                "prompt": prompt,
+                "options": [{"dosha": d, "label": label} for d, label in opts],
+            }
+            for qid, prompt, opts in PRAKRITI_QUESTIONS
+        ]
+    }
+
+
+@api_router.post("/quiz/analyze", response_model=AnalysisRecord)
+async def quiz_analyze(payload: QuizAnalyzeRequest):
+    valid_ids = {qid for qid, _, _ in PRAKRITI_QUESTIONS}
+    if not payload.answers or not set(payload.answers.keys()).issubset(valid_ids):
+        raise HTTPException(status_code=400, detail="Invalid or incomplete answers")
+    for d in payload.answers.values():
+        if d not in {"vata", "pitta", "kapha"}:
+            raise HTTPException(status_code=400, detail=f"Invalid dosha value: {d}")
+
+    result = analyze_prakriti(payload.answers, payload.age)
+    record = AnalysisRecord(
+        mode="quiz",
+        age=payload.age,
+        symptoms=list(payload.answers.keys()),
+        lifestyle="quiz",
+        **result,
+    )
+    doc = record.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.analyses.insert_one(doc)
+    return record
 
 
 @api_router.get("/options")

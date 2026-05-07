@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import Hero from "@/components/ayur/Hero";
 import DoshaForm from "@/components/ayur/DoshaForm";
+import PrakritiQuiz from "@/components/ayur/PrakritiQuiz";
 import ResultsCard from "@/components/ayur/ResultsCard";
 import AboutAyurveda from "@/components/ayur/AboutAyurveda";
 import History from "@/components/ayur/History";
@@ -16,6 +17,7 @@ export default function AyurAI() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  const [mode, setMode] = useState("quick"); // 'quick' | 'quiz'
   const resultsRef = useRef(null);
   const formRef = useRef(null);
 
@@ -65,6 +67,12 @@ export default function AyurAI() {
   const handleReset = () => {
     setResult(null);
     toast.message("Form reset");
+  };
+
+  const handleQuizResult = (data) => {
+    setResult(data);
+    loadHistory();
+    setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
 
   const handleDeleteHistory = async (id) => {
@@ -118,11 +126,44 @@ export default function AyurAI() {
               Discover the dosha at play<br/>within you today.
             </h2>
             <p className="mt-4 text-[#5C6B61] text-base md:text-lg max-w-xl">
-              Answer three short questions. We'll map your signals to Vata, Pitta or Kapha and return herbs and lifestyle practices rooted in 5,000 years of Ayurvedic wisdom.
+              {mode === "quick"
+                ? "Answer three short questions for a quick read — or switch to the full 20-question Prakriti quiz for a deeper analysis."
+                : "Twenty classical questions adapted from Ayurvedic Prakriti assessment. Answer honestly — there are no right answers, only your unique nature."}
             </p>
           </div>
 
-          <DoshaForm options={options} loading={loading} onAnalyze={handleAnalyze} onReset={handleReset} />
+          {/* Mode switcher */}
+          <div
+            data-testid="mode-switcher"
+            className="mt-10 inline-flex p-1 rounded-full bg-[#ECEDE8] border border-[#E2E4DF]"
+          >
+            <button
+              type="button"
+              data-testid="mode-quick"
+              onClick={() => { setMode("quick"); setResult(null); }}
+              className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
+                mode === "quick" ? "bg-white text-[#2C362F] shadow-sm" : "text-[#5C6B61] hover:text-[#2C362F]"
+              }`}
+            >
+              Quick read · 3 Q
+            </button>
+            <button
+              type="button"
+              data-testid="mode-quiz"
+              onClick={() => { setMode("quiz"); setResult(null); }}
+              className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
+                mode === "quiz" ? "bg-white text-[#2C362F] shadow-sm" : "text-[#5C6B61] hover:text-[#2C362F]"
+              }`}
+            >
+              Full Prakriti quiz · 20 Q
+            </button>
+          </div>
+
+          {mode === "quick" ? (
+            <DoshaForm options={options} loading={loading} onAnalyze={handleAnalyze} onReset={handleReset} />
+          ) : (
+            <PrakritiQuiz onResult={handleQuizResult} />
+          )}
 
           <div ref={resultsRef} className="mt-16">
             {result && <ResultsCard result={result} />}
