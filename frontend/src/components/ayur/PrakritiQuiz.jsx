@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Wand2, RotateCcw } from "lucide-react";
+import { apiUrl } from "@/lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const DOSHA_COLOR = { vata: "#D4A373", pitta: "#C8624C", kapha: "#4A7C59" };
 
 export default function PrakritiQuiz({ onResult }) {
@@ -15,7 +15,7 @@ export default function PrakritiQuiz({ onResult }) {
 
   useEffect(() => {
     axios
-      .get(`${API}/quiz`)
+      .get(apiUrl("/quiz"))
       .then(({ data }) => setQuestions(data.questions || []))
       .catch(() => toast.error("Could not load quiz questions"));
   }, []);
@@ -58,7 +58,7 @@ export default function PrakritiQuiz({ onResult }) {
   const submit = async () => {
     setSubmitting(true);
     try {
-      const { data } = await axios.post(`${API}/quiz/analyze`, {
+      const { data } = await axios.post(apiUrl("/quiz/analyze"), {
         age: Number(age),
         answers,
       });

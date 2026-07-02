@@ -9,8 +9,7 @@ import AboutAyurveda from "@/components/ayur/AboutAyurveda";
 import History from "@/components/ayur/History";
 import Disclaimer from "@/components/ayur/Disclaimer";
 import { Leaf } from "lucide-react";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { apiUrl } from "@/lib/api";
 
 export default function AyurAI() {
   const [options, setOptions] = useState({ symptoms: [], lifestyles: [] });
@@ -23,7 +22,7 @@ export default function AyurAI() {
 
   const loadOptions = async () => {
     try {
-      const { data } = await axios.get(`${API}/options`);
+      const { data } = await axios.get(apiUrl("/options"));
       setOptions(data);
     } catch (e) {
       console.error("options error", e);
@@ -32,7 +31,7 @@ export default function AyurAI() {
 
   const loadHistory = async () => {
     try {
-      const { data } = await axios.get(`${API}/history`);
+      const { data } = await axios.get(apiUrl("/history"));
       setHistory(data);
     } catch (e) {
       console.error("history error", e);
@@ -47,7 +46,7 @@ export default function AyurAI() {
   const handleAnalyze = async ({ age, symptoms, lifestyle }) => {
     setLoading(true);
     try {
-      const { data } = await axios.post(`${API}/analyze`, {
+      const { data } = await axios.post(apiUrl("/analyze"), {
         age: Number(age),
         symptoms,
         lifestyle,
@@ -77,7 +76,7 @@ export default function AyurAI() {
 
   const handleDeleteHistory = async (id) => {
     try {
-      await axios.delete(`${API}/history/${id}`);
+      await axios.delete(apiUrl(`/history/${id}`));
       setHistory((h) => h.filter((x) => x.id !== id));
       toast.success("Entry removed");
     } catch (e) {
