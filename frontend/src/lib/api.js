@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND_URL = "http://localhost:8000";
+const DEFAULT_BACKEND_URL = "http://localhost:3000";
 const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim() || DEFAULT_BACKEND_URL;
 
 const normalizeBaseUrl = (value) => {

@@ -8,7 +8,31 @@ const lifestyleDesc = {
   sedentary: "Mostly sitting, minimal movement",
 };
 
+const DEFAULT_SYMPTOMS = [
+  { id: "stress", label: "Stress" },
+  { id: "cold", label: "Cold hands/feet" },
+  { id: "fatigue", label: "Fatigue" },
+  { id: "digestion_issues", label: "Digestion issues" },
+  { id: "insomnia", label: "Insomnia" },
+  { id: "anxiety", label: "Anxiety" },
+  { id: "headaches", label: "Headaches" },
+  { id: "skin_issues", label: "Skin issues" },
+  { id: "joint_pain", label: "Joint pain" },
+  { id: "weight_gain", label: "Weight gain" },
+  { id: "congestion", label: "Congestion" },
+  { id: "irritability", label: "Irritability" },
+];
+
+const DEFAULT_LIFESTYLES = [
+  { id: "active", label: "Active" },
+  { id: "moderate", label: "Moderate" },
+  { id: "sedentary", label: "Sedentary" },
+];
+
 export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
+  const symptomsList = options?.symptoms?.length > 0 ? options.symptoms : DEFAULT_SYMPTOMS;
+  const lifestylesList = options?.lifestyles?.length > 0 ? options.lifestyles : DEFAULT_LIFESTYLES;
+
   const [age, setAge] = useState("");
   const [symptoms, setSymptoms] = useState([]);
   const [lifestyle, setLifestyle] = useState("moderate");
@@ -61,7 +85,7 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
           Current signals ({symptoms.length} selected)
         </label>
         <div data-testid="symptom-group" className="flex flex-wrap gap-2.5">
-          {options.symptoms.map((s) => {
+          {symptomsList.map((s) => {
             const selected = symptoms.includes(s.id);
             return (
               <button
@@ -86,7 +110,7 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
       <div className="mb-10">
         <label className="block text-xs uppercase tracking-[0.22em] text-[#5C6B61] mb-4">Lifestyle</label>
         <div data-testid="lifestyle-group" className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {options.lifestyles.map((l) => {
+          {lifestylesList.map((l) => {
             const selected = lifestyle === l.id;
             return (
               <button
