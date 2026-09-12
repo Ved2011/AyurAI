@@ -151,6 +151,8 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
             );
           })}
         </div>
+      </div>
+
       {/* Pre-existing Conditions */}
       <div className="mb-10">
         <label className="block text-xs uppercase tracking-[0.22em] text-[#5C6B61] mb-2">
