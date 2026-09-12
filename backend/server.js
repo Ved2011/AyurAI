@@ -448,11 +448,11 @@ app.post("/api/viruddha-check", (req, res) => {
   }
 });
 
-// ---------- Serve Frontend Static Files ----------
-const buildPath = path.join(__dirname, "../frontend/build");
-app.use(express.static(buildPath));
+// ---------- Serve Pure HTML Static Files ----------
+const publicPath = path.join(__dirname, "public");
+app.use(express.static(publicPath));
 app.get("*", (req, res) => {
-  res.sendFile(path.join(buildPath, "index.html"));
+  res.sendFile(path.join(publicPath, "index.html"));
 });
 
 app.listen(PORT, () => {
