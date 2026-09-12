@@ -3,10 +3,13 @@ const cors = require("cors");
 const path = require("path");
 const { MongoClient } = require("mongodb");
 const { v4: uuidv4 } = require("uuid");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "ayurai_secret_jwt_key_2026";
 
 app.use(cors());
 app.use(express.json());
@@ -24,20 +27,127 @@ MongoClient.connect(mongoUrl)
     console.error("MongoDB connection error:", err);
   });
 
-// ---------- Dosha Rule Engine ----------
+// Auth Middleware (optional or required)
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return next();
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (!err) req.user = user;
+    next();
+  });
+};
+
+app.use(authenticateToken);
+
+// ---------- Classical Ayurvedic Knowledge Base ----------
+const DOSHA_INFO = {
+  vata: {
+    name: "Vata",
+    element: "Air & Ether (Vayu & Akasha)",
+    subdoshas: ["Prana Vata", "Udana Vata", "Samana Vata", "Vyana Vata", "Apana Vata"],
+    tagline: "The principle of movement, communication & enthusiasm.",
+    description:
+      "Vata governs all bodily movements, breathing, nerve impulses, and circulation. When balanced, it promotes creativity, agility, and joy. When imbalanced, it manifests as dryness, anxiety, bloating, insomnia, and erratic energy.",
+    herbs: [
+      { name: "Ashwagandha", benefit: "Calms the nervous system & builds Ojas (vitality)" },
+      { name: "Brahmi (Gotu Kola)", benefit: "Soothes mental restlessness & enhances focus" },
+      { name: "Triphala", benefit: "Gentle digestive elimination without irritating dryness" },
+      { name: "Yashtimadhu (Licorice)", benefit: "Lubricates dry tissues & supports adrenal health" },
+      { name: "Shatavari", benefit: "Nourishes reproductive tissues & grounds Vata heat" },
+    ],
+    lifestyle_advice: [
+      "Follow a consistent daily rhythm (Dinacharya) — fixed meal times and sleep by 10 PM.",
+      "Prioritize warm, cooked, grounding foods with healthy fats (ghee, sesame oil). Avoid cold, raw salads.",
+      "Practice daily 15-minute warm sesame oil self-massage (Abhyanga) before bathing.",
+      "Sip warm ginger, cinnamon, or cardamom tea throughout the day; limit caffeine.",
+      "Engage in gentle, slow-paced yoga, grounding pranayama (Nadi Shodhana), and warm baths.",
+    ],
+  },
+  pitta: {
+    name: "Pitta",
+    element: "Fire & Water (Agni & Jala)",
+    subdoshas: ["Pachaka Pitta", "Ranjaka Pitta", "Sadhaka Pitta", "Alochaka Pitta", "Bhrajaka Pitta"],
+    tagline: "The principle of transformation, metabolism & intelligence.",
+    description:
+      "Pitta governs digestion, body temperature, liver metabolism, visual perception, and intellect. When balanced, it yields sharp focus, courage, and clear digestion. When imbalanced, it causes acid reflux, skin inflammation, irritability, and overheating.",
+    herbs: [
+      { name: "Amalaki (Amla)", benefit: "Potent cooling antioxidant; cleanses liver & pacifies Pitta" },
+      { name: "Shatavari", benefit: "Cools internal heat & protects stomach mucosal lining" },
+      { name: "Neem", benefit: "Purifies blood & clears inflammatory skin flare-ups" },
+      { name: "Dhanyaka (Coriander)", benefit: "Gently cools digestive fire without quenching Agni" },
+      { name: "Guduchi (Giloy)", benefit: "Rebalances immunity & relieves chronic heat" },
+    ],
+    lifestyle_advice: [
+      "Enjoy cooling, fresh foods like cucumber, coconut water, sweet juicy fruits, and leafy greens.",
+      "Strictly avoid excessively spicy, pungent, fermented, fried, or over-salted meals.",
+      "Exercise during cooler morning or evening hours; avoid intense sun exposure between 10 AM - 2 PM.",
+      "Incorporate calming moonlight walks, relaxing music, and non-competitive recreation.",
+      "Practice cooling Sheetali/Sheetkari pranayama for 5-10 minutes daily.",
+    ],
+  },
+  kapha: {
+    name: "Kapha",
+    element: "Earth & Water (Prithvi & Jala)",
+    subdoshas: ["Kledaka Kapha", "Avalambaka Kapha", "Bodhaka Kapha", "Tarpaka Kapha", "Sleshaka Kapha"],
+    tagline: "The principle of structure, stamina, immunity & cohesion.",
+    description:
+      "Kapha governs physical structure, joint lubrication, fluid balance, and emotional stability. When balanced, it endows deep stamina, calm compassion, and strong immunity. When imbalanced, it leads to lethargy, weight gain, sinus congestion, and attachment.",
+    herbs: [
+      { name: "Trikatu (Ginger, Black Pepper, Pippali)", benefit: "Ignites digestive Agni & burns sluggish Ama" },
+      { name: "Tulsi (Holy Basil)", benefit: "Clears respiratory congestion & uplifts mood" },
+      { name: "Guggulu", benefit: "Promotes healthy lipid metabolism & joint mobility" },
+      { name: "Haridra (Turmeric)", benefit: "Dries damp excess & reduces systemic inflammation" },
+      { name: "Punar Nava", benefit: "Supports fluid balance & kidney drainage" },
+    ],
+    lifestyle_advice: [
+      "Rise early before 6 AM (during Vata hour) to prevent morning heaviness.",
+      "Engage in vigorous daily exercise (brisk walking, sun salutations, HIIT).",
+      "Favor warm, light, pungent, bitter, and astringent foods; minimize heavy dairy, sweets, and cold drinks.",
+      "Perform daily dry silk or bristle body brushing (Garshana) before shower to stimulate lymph.",
+      "Sip warm water infused with lemon, ginger, and raw honey throughout the morning.",
+    ],
+  },
+  "vata-pitta": {
+    name: "Vata-Pitta (Dual Doshic)",
+    element: "Air, Fire & Ether",
+    tagline: "High drive with quick reactivity — needs grounding & cooling.",
+    description: "Combination of Vata agility and Pitta intensity. Benefits from warm yet cooling foods and soothing routines.",
+    herbs: [{ name: "Ashwagandha", benefit: "Calms Vata" }, { name: "Amla", benefit: "Cools Pitta" }, { name: "Brahmi", benefit: "Balances both mind & heat" }],
+    lifestyle_advice: ["Avoid overworking; balance intense effort with peaceful relaxation.", "Eat warm, well-spiced but mild foods; avoid fiery spices."]
+  },
+  "pitta-kapha": {
+    name: "Pitta-Kapha (Dual Doshic)",
+    element: "Fire, Earth & Water",
+    tagline: "Strong stamina with strong digestion — needs lightness & moderation.",
+    description: "Combination of Pitta digestive drive and Kapha physical strength. Benefits from light, bitter, and moderately cooling foods.",
+    herbs: [{ name: "Guduchi", benefit: "Harmonizes Pitta and Kapha" }, { name: "Neem", benefit: "Clears skin and heat" }, { name: "Triphala", benefit: "Cleanses metabolic sluggishness" }],
+    lifestyle_advice: ["Stay active regularly while keeping workouts enjoyable and cool.", "Limit oily, rich, or sugary foods."]
+  },
+  "vata-kapha": {
+    name: "Vata-Kapha (Dual Doshic)",
+    element: "Air, Earth & Ether",
+    tagline: "Varied energy & steady endurance — needs warmth & circulation.",
+    description: "Combination of Vata dryness and Kapha heaviness. Benefits from warm, spicy, dry, light foods.",
+    herbs: [{ name: "Trikatu", benefit: "Stimulates sluggish Agni" }, { name: "Ashwagandha", benefit: "Warms Vata and builds immunity" }, { name: "Tulsi", benefit: "Clears congestion" }],
+    lifestyle_advice: ["Embrace dynamic routines with warm spices (cinnamon, ginger, clove).", "Avoid cold drinks and humid, damp environments."]
+  }
+};
+
 const SYMPTOM_MAP = {
-  stress: "vata",
-  cold: "vata",
-  insomnia: "vata",
-  anxiety: "vata",
-  joint_pain: "vata",
-  fatigue: "kapha",
-  weight_gain: "kapha",
-  congestion: "kapha",
-  digestion_issues: "pitta",
-  headaches: "pitta",
-  skin_issues: "pitta",
-  irritability: "pitta",
+  stress: { dosha: "vata", weight: 2 },
+  cold: { dosha: "vata", weight: 2 },
+  insomnia: { dosha: "vata", weight: 2 },
+  anxiety: { dosha: "vata", weight: 2 },
+  joint_pain: { dosha: "vata", weight: 2 },
+  fatigue: { dosha: "kapha", weight: 2 },
+  weight_gain: { dosha: "kapha", weight: 2 },
+  congestion: { dosha: "kapha", weight: 2 },
+  digestion_issues: { dosha: "pitta", weight: 2 },
+  headaches: { dosha: "pitta", weight: 2 },
+  skin_issues: { dosha: "pitta", weight: 2 },
+  irritability: { dosha: "pitta", weight: 2 },
 };
 
 const LIFESTYLE_MAP = {
@@ -46,117 +156,51 @@ const LIFESTYLE_MAP = {
   sedentary: "kapha",
 };
 
-const DOSHA_INFO = {
-  vata: {
-    name: "Vata",
-    element: "Air & Ether",
-    tagline: "The energy of movement.",
-    description:
-      "Vata governs breath, circulation and the nervous system. When imbalanced you may feel dry, restless, anxious, or scattered. Balance is restored through warmth, routine and grounding.",
-    herbs: [
-      { name: "Ashwagandha", benefit: "Calms the nervous system & builds stamina" },
-      { name: "Brahmi", benefit: "Soothes the mind and supports sleep" },
-      { name: "Triphala", benefit: "Gentle digestive and elimination support" },
-      { name: "Licorice (Yashtimadhu)", benefit: "Lubricates tissues & eases dryness" },
-    ],
-    lifestyle_advice: [
-      "Follow a consistent daily routine — regular meals and bedtime.",
-      "Favor warm, cooked, slightly oily foods; avoid cold salads and raw snacks.",
-      "Practice slow yoga, gentle walks and 10-minute abhyanga (warm oil self-massage).",
-      "Sip warm ginger or cinnamon tea; reduce caffeine.",
-      "Sleep by 10 PM — Vata thrives on rest and rhythm.",
-    ],
-  },
-  pitta: {
-    name: "Pitta",
-    element: "Fire & Water",
-    tagline: "The energy of transformation.",
-    description:
-      "Pitta governs digestion, metabolism and intellect. When imbalanced you may feel overheated, irritable, inflamed or overly intense. Balance is restored through cooling, moderation and compassion.",
-    herbs: [
-      { name: "Amla (Amalaki)", benefit: "Cools the system & supports liver" },
-      { name: "Shatavari", benefit: "Soothes inflammation and hormonal heat" },
-      { name: "Neem", benefit: "Purifies the skin and blood" },
-      { name: "Coriander", benefit: "Cools digestion gently" },
-    ],
-    lifestyle_advice: [
-      "Eat cooling foods — cucumbers, coconut, sweet fruits, leafy greens.",
-      "Avoid spicy, fried, sour and excessively salty foods.",
-      "Exercise in the morning or evening; avoid midday sun.",
-      "Make time for laughter, moonlight walks and non-competitive hobbies.",
-      "Practice cooling pranayama (Sheetali breath) for 5 minutes daily.",
-    ],
-  },
-  kapha: {
-    name: "Kapha",
-    element: "Earth & Water",
-    tagline: "The energy of structure.",
-    description:
-      "Kapha governs stability, immunity and lubrication. When imbalanced you may feel heavy, sluggish, congested or emotionally stuck. Balance is restored through movement, warmth and stimulation.",
-    herbs: [
-      { name: "Trikatu", benefit: "Ignites digestive fire (ginger + pepper + pippali)" },
-      { name: "Tulsi (Holy Basil)", benefit: "Clears congestion and uplifts mood" },
-      { name: "Guggulu", benefit: "Supports metabolism & healthy weight" },
-      { name: "Turmeric", benefit: "Reduces dampness & inflammation" },
-    ],
-    lifestyle_advice: [
-      "Rise early (before 6 AM) and move your body vigorously each day.",
-      "Favor light, warm, spicy foods; reduce dairy, sweets and heavy oils.",
-      "Try dry brushing (garshana) before bathing to stimulate circulation.",
-      "Seek variety — change routines, try new routes, stay curious.",
-      "Sip warm water with lemon, ginger and honey through the day.",
-    ],
-  },
-};
-
 const PRAKRITI_QUESTIONS = [
-  { id: "body_frame", prompt: "Body frame", options: [{ dosha: "vata", label: "Thin, lean, hard to gain weight" }, { dosha: "pitta", label: "Medium, muscular, well-proportioned" }, { dosha: "kapha", label: "Large, sturdy, gains weight easily" }] },
-  { id: "weight_pattern", prompt: "Weight pattern", options: [{ dosha: "vata", label: "Light — fluctuates easily" }, { dosha: "pitta", label: "Moderate — stable with effort" }, { dosha: "kapha", label: "Heavy — gains quickly, loses slowly" }] },
-  { id: "skin", prompt: "Skin", options: [{ dosha: "vata", label: "Dry, rough, cool, thin" }, { dosha: "pitta", label: "Warm, reddish, sensitive, freckles/moles" }, { dosha: "kapha", label: "Soft, oily, thick, pale, smooth" }] },
-  { id: "hair", prompt: "Hair", options: [{ dosha: "vata", label: "Dry, frizzy, brittle, thin" }, { dosha: "pitta", label: "Fine, soft, early graying or balding" }, { dosha: "kapha", label: "Thick, oily, wavy, lustrous" }] },
-  { id: "eyes", prompt: "Eyes", options: [{ dosha: "vata", label: "Small, dry, active, dark" }, { dosha: "pitta", label: "Medium, sharp, penetrating" }, { dosha: "kapha", label: "Large, calm, moist, attractive" }] },
-  { id: "teeth", prompt: "Teeth", options: [{ dosha: "vata", label: "Uneven, gums recede, often sensitive" }, { dosha: "pitta", label: "Medium-sized, yellowish, prone to bleeding gums" }, { dosha: "kapha", label: "Large, white, strong, well-formed" }] },
-  { id: "appetite", prompt: "Appetite", options: [{ dosha: "vata", label: "Irregular — sometimes hungry, sometimes not" }, { dosha: "pitta", label: "Strong — intense hunger, gets irritable if skipped" }, { dosha: "kapha", label: "Slow but steady — can easily skip meals" }] },
-  { id: "thirst", prompt: "Thirst", options: [{ dosha: "vata", label: "Variable" }, { dosha: "pitta", label: "High — always reaching for water" }, { dosha: "kapha", label: "Low — rarely thirsty" }] },
-  { id: "digestion", prompt: "Digestion", options: [{ dosha: "vata", label: "Irregular, gas, bloating" }, { dosha: "pitta", label: "Strong, quick, occasional heartburn" }, { dosha: "kapha", label: "Slow, heavy after meals" }] },
-  { id: "sleep", prompt: "Sleep", options: [{ dosha: "vata", label: "Light, interrupted, 5–6 hours" }, { dosha: "pitta", label: "Moderate, sound, 6–8 hours" }, { dosha: "kapha", label: "Deep, heavy, 8+ hours, hard to wake" }] },
-  { id: "energy", prompt: "Energy pattern", options: [{ dosha: "vata", label: "Bursts of energy then fatigue" }, { dosha: "pitta", label: "Moderate, focused, goal-driven" }, { dosha: "kapha", label: "Steady, strong, enduring" }] },
-  { id: "speed", prompt: "Speed of action", options: [{ dosha: "vata", label: "Fast, restless, hurried" }, { dosha: "pitta", label: "Medium, purposeful, sharp" }, { dosha: "kapha", label: "Slow, methodical, graceful" }] },
-  { id: "memory", prompt: "Memory", options: [{ dosha: "vata", label: "Learns quickly, forgets quickly" }, { dosha: "pitta", label: "Sharp and accurate" }, { dosha: "kapha", label: "Slow to learn, excellent long-term recall" }] },
-  { id: "stress_response", prompt: "Under stress I feel", options: [{ dosha: "vata", label: "Anxious, worried, scattered" }, { dosha: "pitta", label: "Angry, irritable, critical" }, { dosha: "kapha", label: "Withdrawn, quiet, calm" }] },
-  { id: "mind", prompt: "Mind", options: [{ dosha: "vata", label: "Creative, imaginative, restless" }, { dosha: "pitta", label: "Intelligent, analytical, decisive" }, { dosha: "kapha", label: "Steady, grounded, thoughtful" }] },
-  { id: "sweat", prompt: "Sweat", options: [{ dosha: "vata", label: "Minimal, even in heat" }, { dosha: "pitta", label: "Profuse, often with strong odor" }, { dosha: "kapha", label: "Moderate, pleasant" }] },
-  { id: "voice", prompt: "Voice / speech", options: [{ dosha: "vata", label: "Fast, variable, talkative" }, { dosha: "pitta", label: "Sharp, clear, convincing" }, { dosha: "kapha", label: "Deep, slow, melodious" }] },
-  { id: "body_temperature", prompt: "Body temperature", options: [{ dosha: "vata", label: "Usually cold — cold hands and feet" }, { dosha: "pitta", label: "Usually warm — seeks cool places" }, { dosha: "kapha", label: "Cool and moist — adapts well" }] },
-  { id: "decisions", prompt: "Decision making", options: [{ dosha: "vata", label: "Changes mind often, indecisive" }, { dosha: "pitta", label: "Decisive, quick, firm" }, { dosha: "kapha", label: "Reflective, slow, thorough" }] },
-  { id: "money", prompt: "Money habits", options: [{ dosha: "vata", label: "Spends impulsively, on small things" }, { dosha: "pitta", label: "Spends on luxury and quality" }, { dosha: "kapha", label: "Saves carefully, resists spending" }] },
+  { id: "body_frame", prompt: "Body Frame & Bone Structure", options: [{ dosha: "vata", label: "Slender, narrow shoulders/hips, prominent joints" }, { dosha: "pitta", label: "Medium build, muscular, athletic proportion" }, { dosha: "kapha", label: "Broad chest, sturdy frame, large boned" }] },
+  { id: "weight_pattern", prompt: "Lifelong Weight Tendency", options: [{ dosha: "vata", label: "Hard to gain weight; remains lean easily" }, { dosha: "pitta", label: "Gains or loses easily with conscious effort" }, { dosha: "kapha", label: "Gains weight easily, very hard to lose" }] },
+  { id: "skin", prompt: "Skin Texture & Temperature", options: [{ dosha: "vata", label: "Dry, cool to touch, thin, prone to chapping" }, { dosha: "pitta", label: "Warm, sensitive, prone to redness/freckles" }, { dosha: "kapha", label: "Smooth, soft, moist, thick, pale" }] },
+  { id: "hair", prompt: "Hair Type & Quality", options: [{ dosha: "vata", label: "Dry, frizzy, brittle, coarse" }, { dosha: "pitta", label: "Fine, soft, early graying or thinning" }, { dosha: "kapha", label: "Thick, lustrous, wavy, strong roots" }] },
+  { id: "eyes", prompt: "Eyes & Gaze", options: [{ dosha: "vata", label: "Small, active, dark, dry lids" }, { dosha: "pitta", label: "Medium, sharp, bright, sensitive to light" }, { dosha: "kapha", label: "Large, serene, clear whites, long lashes" }] },
+  { id: "appetite", prompt: "Appetite & Hunger Pattern (Agni)", options: [{ dosha: "vata", label: "Irregular — sometimes starving, sometimes skip effortlessly" }, { dosha: "pitta", label: "Sharp & intense — irritable if meals are delayed" }, { dosha: "kapha", label: "Steady but low — can comfortably skip meals" }] },
+  { id: "digestion", prompt: "Elimination & Bowel Tendencies (Koshtha)", options: [{ dosha: "vata", label: "Dry, hard stools, tendency towards constipation/gas" }, { dosha: "pitta", label: "Loose or frequent stools, yellow, occasional burning" }, { dosha: "kapha", label: "Heavy, sluggish, regular, well-formed stools" }] },
+  { id: "sleep", prompt: "Sleep Depth & Duration", options: [{ dosha: "vata", label: "Light, easily awakened, 5-6 hours, restless" }, { dosha: "pitta", label: "Moderate, sound, 6-7 hours, can wake up quickly" }, { dosha: "kapha", label: "Deep, heavy, 8+ hours, difficulty waking up" }] },
+  { id: "energy", prompt: "Energy & Endurance Pattern", options: [{ dosha: "vata", label: "Quick bursts of energy, fatigues suddenly" }, { dosha: "pitta", label: "Strong, goal-driven stamina, high intensity" }, { dosha: "kapha", label: "Slow start, but immense long-lasting endurance" }] },
+  { id: "stress_response", prompt: "Emotional Stress Reaction", options: [{ dosha: "vata", label: "Anxiety, fear, worry, mind racing" }, { dosha: "pitta", label: "Anger, impatience, frustration, criticism" }, { dosha: "kapha", label: "Stubbornness, withdrawal, calm resistance" }] },
+  { id: "mind", prompt: "Learning & Memory Style", options: [{ dosha: "vata", label: "Grasps quickly, forgets quickly" }, { dosha: "pitta", label: "Sharp comprehension, clear recall" }, { dosha: "kapha", label: "Slow to learn, never forgets (retentive)" }] },
+  { id: "climate", prompt: "Weather Preference", options: [{ dosha: "vata", label: "Dislikes cold, wind & dryness; loves warmth" }, { dosha: "pitta", label: "Dislikes heat, humidity & bright sun; loves shade" }, { dosha: "kapha", label: "Dislikes cold & damp; thrives in warm dry weather" }] }
 ];
 
-function analyzeDosha(age, symptoms = [], lifestyle = "") {
+// ---------- Advanced Diagnostic Calculator ----------
+function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswers = {}) {
   const scores = { vata: 0, pitta: 0, kapha: 0 };
-  if (age < 25) scores.kapha += 1;
-  else if (age <= 55) scores.pitta += 1;
-  else scores.vata += 1;
 
+  // 1. Quiz Answers (Innate Prakriti Signal)
+  for (const [qid, dosha] of Object.entries(quizAnswers)) {
+    if (scores[dosha] !== undefined) {
+      scores[dosha] += 3;
+    }
+  }
+
+  // 2. Acute Symptoms (Vikriti Signal)
   for (const s of symptoms) {
-    const dosha = SYMPTOM_MAP[s];
-    if (dosha) scores[dosha] += 2;
+    const item = SYMPTOM_MAP[s];
+    if (item && scores[item.dosha] !== undefined) {
+      scores[item.dosha] += item.weight;
+    }
   }
 
+  // 3. Lifestyle Signal
   const lifestyleDosha = LIFESTYLE_MAP[lifestyle];
-  if (lifestyleDosha) scores[lifestyleDosha] += 1;
-
-  const order = ["vata", "pitta", "kapha"];
-  let dominant = "vata";
-  let maxScore = -1;
-  for (const d of order) {
-    if (scores[d] > maxScore) {
-      maxScore = scores[d];
-      dominant = d;
-    }
+  if (lifestyleDosha && scores[lifestyleDosha] !== undefined) {
+    scores[lifestyleDosha] += 2;
   }
 
-  const info = DOSHA_INFO[dominant];
+  // 4. Age (Vaya) Life Stage Factor
+  if (age < 20) scores.kapha += 2;
+  else if (age <= 55) scores.pitta += 2;
+  else scores.vata += 2;
+
   const total = Object.values(scores).reduce((a, b) => a + b, 0) || 1;
   const percentages = {
     vata: Math.round((scores.vata / total) * 100),
@@ -164,68 +208,134 @@ function analyzeDosha(age, symptoms = [], lifestyle = "") {
     kapha: Math.round((scores.kapha / total) * 100),
   };
 
-  return { dosha: dominant, dosha_name: info.name, element: info.element, tagline: info.tagline, description: info.description, herbs: info.herbs, lifestyle_advice: info.lifestyle_advice, scores, percentages };
-}
+  // Determine dominant vs dual-dosha designation
+  const sorted = Object.keys(scores).sort((a, b) => scores[b] - scores[a]);
+  const primary = sorted[0];
+  const secondary = sorted[1];
 
-function analyzePrakriti(answers = {}, age = 30) {
-  const scores = { vata: 0, pitta: 0, kapha: 0 };
-  const validIds = new Set(PRAKRITI_QUESTIONS.map((q) => q.id));
-
-  for (const [qid, dosha] of Object.entries(answers)) {
-    if (validIds.has(qid) && scores[dosha] !== undefined) {
-      scores[dosha] += 1;
+  let profileKey = primary;
+  if (percentages[primary] - percentages[secondary] <= 12) {
+    const dualPair = [primary, secondary].sort().join("-");
+    if (DOSHA_INFO[dualPair]) {
+      profileKey = dualPair;
     }
   }
 
-  if (age < 25) scores.kapha += 1;
-  else if (age <= 55) scores.pitta += 1;
-  else scores.vata += 1;
+  const info = DOSHA_INFO[profileKey] || DOSHA_INFO[primary];
 
-  const order = ["vata", "pitta", "kapha"];
-  let dominant = "vata";
-  let maxScore = -1;
-  for (const d of order) {
-    if (scores[d] > maxScore) {
-      maxScore = scores[d];
-      dominant = d;
-    }
+  // Agni Diagnosis
+  let agniType = "Sama Agni (Balanced)";
+  let agniDesc = "Balanced metabolic fire ensuring optimal assimilation and energy.";
+  if (scores.vata > scores.pitta && scores.vata > scores.kapha) {
+    agniType = "Vishama Agni (Erratic)";
+    agniDesc = "Variable digestive strength leading to gas, bloating, and irregular appetite.";
+  } else if (scores.pitta > scores.vata && scores.pitta > scores.kapha) {
+    agniType = "Tikshna Agni (Hyper-active)";
+    agniDesc = "Intense, rapid digestion prone to hyperacidity, burning, and loose bowel movements.";
+  } else if (scores.kapha > scores.vata && scores.kapha > scores.pitta) {
+    agniType = "Manda Agni (Sluggish)";
+    agniDesc = "Slow digestion causing heaviness, coated tongue, and fatigue after meals.";
   }
 
-  const info = DOSHA_INFO[dominant];
-  const total = Object.values(scores).reduce((a, b) => a + b, 0) || 1;
-  const percentages = {
-    vata: Math.round((scores.vata / total) * 100),
-    pitta: Math.round((scores.pitta / total) * 100),
-    kapha: Math.round((scores.kapha / total) * 100),
+  return {
+    dosha: primary,
+    profile_key: profileKey,
+    dosha_name: info.name,
+    element: info.element,
+    subdoshas: info.subdoshas || [],
+    tagline: info.tagline,
+    description: info.description,
+    herbs: info.herbs,
+    lifestyle_advice: info.lifestyle_advice,
+    agni: { type: agniType, description: agniDesc },
+    scores,
+    percentages,
   };
-
-  return { dosha: dominant, dosha_name: info.name, element: info.element, tagline: info.tagline, description: info.description, herbs: info.herbs, lifestyle_advice: info.lifestyle_advice, scores, percentages };
 }
 
-// ---------- API Routes ----------
+// ---------- Auth Routes ----------
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!email || !password || !name) {
+    return res.status(400).json({ detail: "Name, email, and password required" });
+  }
+
+  if (!db) return res.status(500).json({ detail: "Database unavailable" });
+
+  try {
+    const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return res.status(400).json({ detail: "Email already registered" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
+    const newUser = { id: userId, name, email: email.toLowerCase(), password: hashedPassword, created_at: new Date().toISOString() };
+
+    await db.collection("users").insertOne(newUser);
+    const token = jwt.sign({ id: userId, email: newUser.email, name: newUser.name }, JWT_SECRET, { expiresIn: "30d" });
+
+    res.json({ token, user: { id: userId, name, email: newUser.email } });
+  } catch (err) {
+    res.status(500).json({ detail: "Server error during registration" });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ detail: "Email and password required" });
+  }
+
+  if (!db) return res.status(500).json({ detail: "Database unavailable" });
+
+  try {
+    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ detail: "Invalid credentials" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ detail: "Invalid credentials" });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: "30d" });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ detail: "Server error during login" });
+  }
+});
+
+app.get("/api/auth/me", (req, res) => {
+  if (!req.user) return res.status(401).json({ detail: "Not authenticated" });
+  res.json({ user: req.user });
+});
+
+// ---------- Main API Routes ----------
 app.get("/api", (req, res) => {
-  res.json({ message: "AyurAI API is running", version: "1.0" });
+  res.json({ message: "AyurAI Classical Engine API is running", version: "2.0" });
 });
 
 app.get("/api/options", (req, res) => {
   const symptoms = [
-    { id: "stress", label: "Stress" },
-    { id: "cold", label: "Cold hands/feet" },
-    { id: "fatigue", label: "Fatigue" },
-    { id: "digestion_issues", label: "Digestion issues" },
-    { id: "insomnia", label: "Insomnia" },
-    { id: "anxiety", label: "Anxiety" },
-    { id: "headaches", label: "Headaches" },
-    { id: "skin_issues", label: "Skin issues" },
-    { id: "joint_pain", label: "Joint pain" },
-    { id: "weight_gain", label: "Weight gain" },
-    { id: "congestion", label: "Congestion" },
-    { id: "irritability", label: "Irritability" },
+    { id: "stress", label: "Stress & Nervous Tension" },
+    { id: "cold", label: "Cold Extremities (Hands/Feet)" },
+    { id: "fatigue", label: "Chronic Fatigue & Heaviness" },
+    { id: "digestion_issues", label: "Acid Reflux / Heartburn" },
+    { id: "insomnia", label: "Light / Interrupted Sleep" },
+    { id: "anxiety", label: "Anxiety & Racing Mind" },
+    { id: "headaches", label: "Frequent Headaches / Migraines" },
+    { id: "skin_issues", label: "Skin Inflammation / Rashes" },
+    { id: "joint_pain", label: "Joint Stiffness & Cracking" },
+    { id: "weight_gain", label: "Water Retention & Sluggish Weight" },
+    { id: "congestion", label: "Sinus / Respiratory Congestion" },
+    { id: "irritability", label: "Short Temper & Irritability" },
   ];
   const lifestyles = [
-    { id: "active", label: "Active" },
-    { id: "moderate", label: "Moderate" },
-    { id: "sedentary", label: "Sedentary" },
+    { id: "active", label: "Active", desc: "High movement, regular sports or manual effort" },
+    { id: "moderate", label: "Moderate", desc: "Balanced desk work with light evening walks" },
+    { id: "sedentary", label: "Sedentary", desc: "Prolonged sitting, minimal daily physical movement" },
   ];
   res.json({ symptoms, lifestyles });
 });
@@ -237,12 +347,13 @@ app.get("/api/quiz", (req, res) => {
 app.post("/api/analyze", async (req, res) => {
   const { age, symptoms = [], lifestyle } = req.body;
   if (!age || age < 1 || age > 120 || !LIFESTYLE_MAP[lifestyle]) {
-    return res.status(400).json({ detail: "Invalid age or lifestyle value" });
+    return res.status(400).json({ detail: "Invalid age or lifestyle input" });
   }
 
-  const result = analyzeDosha(age, symptoms, lifestyle);
+  const result = calculateAyurvedicProfile(age, symptoms, lifestyle);
   const record = {
     id: uuidv4(),
+    user_id: req.user ? req.user.id : null,
     mode: "quick",
     age,
     symptoms,
@@ -255,17 +366,20 @@ app.post("/api/analyze", async (req, res) => {
     try {
       await db.collection("analyses").insertOne({ ...record });
     } catch (err) {
-      console.error("Error inserting record:", err);
+      console.error("Error inserting analysis:", err);
     }
   }
+
   res.json(record);
 });
 
 app.post("/api/quiz/analyze", async (req, res) => {
   const { age = 30, answers = {} } = req.body;
-  const result = analyzePrakriti(answers, age);
+  const result = calculateAyurvedicProfile(age, [], "moderate", answers);
+
   const record = {
     id: uuidv4(),
+    user_id: req.user ? req.user.id : null,
     mode: "quiz",
     age,
     symptoms: Object.keys(answers),
@@ -278,16 +392,18 @@ app.post("/api/quiz/analyze", async (req, res) => {
     try {
       await db.collection("analyses").insertOne({ ...record });
     } catch (err) {
-      console.error("Error inserting record:", err);
+      console.error("Error inserting quiz analysis:", err);
     }
   }
+
   res.json(record);
 });
 
 app.get("/api/history", async (req, res) => {
   if (!db) return res.json([]);
   try {
-    const items = await db.collection("analyses").find({}, { projection: { _id: 0 } }).sort({ created_at: -1 }).limit(50).toArray();
+    const query = req.user ? { $or: [{ user_id: req.user.id }, { user_id: null }] } : {};
+    const items = await db.collection("analyses").find(query, { projection: { _id: 0 } }).sort({ created_at: -1 }).limit(50).toArray();
     res.json(items);
   } catch (err) {
     res.status(500).json({ detail: "Database query error" });
@@ -307,7 +423,32 @@ app.delete("/api/history/:id", async (req, res) => {
   }
 });
 
-// Serve static React build files in production
+// ---------- Feature 11: Incompatible Food (Viruddha Ahara) Checker ----------
+app.post("/api/viruddha-check", (req, res) => {
+  const { foodA = "", foodB = "" } = req.body;
+  const pairs = [
+    { a: "milk", b: "fish", reason: "Opposing thermal energies — milk is cooling, fish is heating. Creates toxic Ama in blood." },
+    { a: "milk", b: "banana", reason: "Changes intestinal flora, produces toxins and causes cold/cough congestion." },
+    { a: "honey", b: "hot water", reason: "Heating honey alters its molecular structure, making it sticky and toxic (Ama) to channels." },
+    { a: "milk", b: "citrus", reason: "Acidic fruits curdle milk in stomach, halting digestive enzymes." },
+    { a: "ghee", b: "honey", reason: "Equal parts ghee and honey create incompatible metabolic reaction." },
+  ];
+
+  const fa = foodA.toLowerCase().trim();
+  const fb = foodB.toLowerCase().trim();
+
+  const found = pairs.find(
+    (p) => (fa.includes(p.a) && fb.includes(p.b)) || (fa.includes(p.b) && fb.includes(p.a))
+  );
+
+  if (found) {
+    res.json({ compatible: false, warning: `Viruddha Ahara Incompatibility! ${found.reason}` });
+  } else {
+    res.json({ compatible: true, message: "These foods are generally compatible under classical Ayurvedic rules." });
+  }
+});
+
+// ---------- Serve Frontend Static Files ----------
 const buildPath = path.join(__dirname, "../frontend/build");
 app.use(express.static(buildPath));
 app.get("*", (req, res) => {
@@ -315,5 +456,5 @@ app.get("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`AyurAI Node Server running on http://0.0.0.0:${PORT}`);
+  console.log(`AyurAI Classical Engine Node Server running on http://0.0.0.0:${PORT}`);
 });

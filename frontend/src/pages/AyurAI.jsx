@@ -11,6 +11,8 @@ import Disclaimer from "@/components/ayur/Disclaimer";
 import { Leaf } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 
+import Navbar from "@/components/layout/Navbar";
+
 export default function AyurAI() {
   const [options, setOptions] = useState({ symptoms: [], lifestyles: [] });
   const [result, setResult] = useState(null);
@@ -43,14 +45,10 @@ export default function AyurAI() {
     loadHistory();
   }, []);
 
-  const handleAnalyze = async ({ age, symptoms, lifestyle }) => {
+  const handleAnalyze = async (formData) => {
     setLoading(true);
     try {
-      const { data } = await axios.post(apiUrl("/analyze"), {
-        age: Number(age),
-        symptoms,
-        lifestyle,
-      });
+      const { data } = await axios.post(apiUrl("/analyze"), formData);
       setResult(data);
       loadHistory();
       toast.success(`Your dominant dosha: ${data.dosha_name}`);
@@ -74,46 +72,9 @@ export default function AyurAI() {
     setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
 
-  const handleDeleteHistory = async (id) => {
-    try {
-      await axios.delete(apiUrl(`/history/${id}`));
-      setHistory((h) => h.filter((x) => x.id !== id));
-      toast.success("Entry removed");
-    } catch (e) {
-      toast.error("Could not delete");
-    }
-  };
-
-  const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-
   return (
-    <div data-testid="ayurai-page" className="min-h-screen relative">
-      {/* Header */}
-      <header
-        data-testid="ayurai-header"
-        className="sticky top-0 z-30 backdrop-blur-md bg-[#F9F6F0]/75 border-b border-[#E2E4DF]"
-      >
-        <div className="max-w-6xl mx-auto px-6 md:px-10 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-9 h-9 rounded-full bg-[#4A7C59] flex items-center justify-center">
-              <Leaf className="w-5 h-5 text-white" />
-            </span>
-            <span className="font-display text-2xl tracking-tight">AyurAI</span>
-          </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-[#5C6B61]">
-            <a href="#analyzer" className="hover:text-[#2C362F]" data-testid="nav-analyzer">Analyzer</a>
-            <a href="#about" className="hover:text-[#2C362F]" data-testid="nav-about">About Ayurveda</a>
-            <a href="#history" className="hover:text-[#2C362F]" data-testid="nav-history">History</a>
-          </nav>
-          <button
-            data-testid="cta-header"
-            onClick={scrollToForm}
-            className="px-5 py-2 rounded-full bg-[#4A7C59] hover:bg-[#3B6347] text-white text-sm font-medium transition-all hover:-translate-y-0.5"
-          >
-            Begin analysis
-          </button>
-        </div>
-      </header>
+    <div data-testid="ayurai-page" className="min-h-screen relative bg-[#F9F6F0]">
+      <Navbar />
 
       <main className="relative z-10">
         <Hero onStart={scrollToForm} />
