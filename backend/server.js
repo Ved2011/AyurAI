@@ -253,11 +253,25 @@ function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswe
   };
 }
 
+// In-memory OTP store: { email: { otp: "123456", name, hashedPassword, expiresAt: timestamp } }
+const pendingRegistrations = new Map();
+
+// Helper to simulate/send OTP
+const sendOtpEmail = (email, otp) => {
+  const fromEmail = "donotreply.ayurai@gmail.com";
+  console.log(`\n==================================================`);
+  console.log(`[EMAIL SERVICE] From: ${fromEmail}`);
+  console.log(`[EMAIL SERVICE] To: ${email}`);
+  console.log(`[EMAIL SERVICE] Subject: Your AyurAI Verification Code`);
+  console.log(`[EMAIL SERVICE] Content: Your 6-digit OTP is: ${otp}`);
+  console.log(`==================================================\n`);
+};
+
 // ---------- Auth Routes ----------
-app.post("/api/auth/register", async (req, res) => {
-  const { name, email, password } = req.body;
+app.post("/api/auth/send-otp", async (req, res) => {
+  const { email, name, password } = req.body;
   if (!email || !password || !name) {
-    return res.status(400).json({ detail: "Name, email, and password required" });
+    return res.status(400).json({ detail: "Name, email, and password are required" });
   }
 
   if (!db) return res.status(500).json({ detail: "Database unavailable" });
@@ -265,14 +279,101 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
     if (existing) {
+      return res.status(400).json({ detail: "Email is already registered" });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    pendingRegistrations.set(email.toLowerCase(), {
+      otp,
+      name,
+      hashedPassword,
+      expiresAt,
+    });
+
+    sendOtpEmail(email, otp);
+
+    res.json({ message: "Verification OTP sent to email", email: email.toLowerCase(), otpDemo: otp });
+  } catch (err) {
+    console.error("Error sending OTP:", err);
+    res.status(500).json({ detail: "Failed to send verification OTP" });
+  }
+});
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ detail: "Email and OTP are required" });
+  }
+
+  const pending = pendingRegistrations.get(email.toLowerCase());
+  if (!pending) {
+    return res.status(400).json({ detail: "No pending registration found for this email. Please request a new code." });
+  }
+
+  if (Date.now() > pending.expiresAt) {
+    pendingRegistrations.delete(email.toLowerCase());
+    return res.status(400).json({ detail: "OTP has expired. Please request a new verification code." });
+  }
+
+  if (pending.otp !== otp.trim()) {
+    return res.status(400).json({ detail: "Invalid OTP code. Please check and try again." });
+  }
+
+  try {
+    const userId = uuidv4();
+    const newUser = {
+      id: userId,
+      name: pending.name,
+      email: email.toLowerCase(),
+      password: pending.hashedPassword,
+      verified: true,
+      created_at: new Date().toISOString(),
+    };
+
+    await db.collection("users").insertOne(newUser);
+    pendingRegistrations.delete(email.toLowerCase());
+
+    const token = jwt.sign({ id: userId, email: newUser.email, name: newUser.name }, JWT_SECRET, { expiresIn: "30d" });
+
+    res.json({ token, user: { id: userId, name: newUser.name, email: newUser.email } });
+  } catch (err) {
+    console.error("Error creating user after OTP:", err);
+    res.status(500).json({ detail: "Failed to complete registration" });
+  }
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password, otp } = req.body;
+  if (!email || !password || !name) {
+    return res.status(400).json({ detail: "Name, email, and password required" });
+  }
+
+  if (!otp) {
+    return res.status(400).json({ detail: "OTP verification required for registration" });
+  }
+
+  if (!db) return res.status(500).json({ detail: "Database unavailable" });
+
+  try {
+    const pending = pendingRegistrations.get(email.toLowerCase());
+    if (!pending || pending.otp !== otp.trim()) {
+      return res.status(400).json({ detail: "Invalid or expired OTP code" });
+    }
+
+    const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
+    if (existing) {
       return res.status(400).json({ detail: "Email already registered" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     const userId = uuidv4();
-    const newUser = { id: userId, name, email: email.toLowerCase(), password: hashedPassword, created_at: new Date().toISOString() };
+    const newUser = { id: userId, name, email: email.toLowerCase(), password: pending.hashedPassword, verified: true, created_at: new Date().toISOString() };
 
     await db.collection("users").insertOne(newUser);
+    pendingRegistrations.delete(email.toLowerCase());
+
     const token = jwt.sign({ id: userId, email: newUser.email, name: newUser.name }, JWT_SECRET, { expiresIn: "30d" });
 
     res.json({ token, user: { id: userId, name, email: newUser.email } });
