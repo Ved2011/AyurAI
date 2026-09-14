@@ -8,10 +8,9 @@ import ResultsCard from "@/components/ayur/ResultsCard";
 import AboutAyurveda from "@/components/ayur/AboutAyurveda";
 import History from "@/components/ayur/History";
 import Disclaimer from "@/components/ayur/Disclaimer";
-import { Leaf } from "lucide-react";
 import { apiUrl } from "@/lib/api";
-
-import Navbar from "@/components/layout/Navbar";
+import Sidebar from "@/components/layout/Sidebar";
+import AuthModal from "@/components/auth/AuthModal";
 
 export default function AyurAI() {
   const [options, setOptions] = useState({ symptoms: [], lifestyles: [] });
@@ -19,6 +18,8 @@ export default function AyurAI() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [mode, setMode] = useState("quick"); // 'quick' | 'quiz'
+  const [user, setUser] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const resultsRef = useRef(null);
   const formRef = useRef(null);
 
@@ -43,7 +44,15 @@ export default function AyurAI() {
   useEffect(() => {
     loadOptions();
     loadHistory();
+    const saved = localStorage.getItem("ayurai_user");
+    if (saved) { try { setUser(JSON.parse(saved)); } catch (e) {} }
   }, []);
+
+  const logout = () => {
+    localStorage.removeItem("ayurai_token");
+    localStorage.removeItem("ayurai_user");
+    setUser(null);
+  };
 
   const handleAnalyze = async (formData) => {
     setLoading(true);
@@ -72,11 +81,25 @@ export default function AyurAI() {
     setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
 
-  return (
-    <div data-testid="ayurai-page" className="min-h-screen relative bg-[#F9F6F0]">
-      <Navbar />
+  const handleDeleteHistory = async (id) => {
+    try {
+      await axios.delete(apiUrl(`/history/${id}`));
+      setHistory((h) => h.filter((x) => x.id !== id));
+      toast.success("Record deleted");
+    } catch (e) {
+      toast.error("Could not delete record");
+    }
+  };
 
-      <main className="relative z-10">
+  const scrollToForm = () => {
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div data-testid="ayurai-page" className="flex min-h-screen bg-[#F8F5EF]">
+      <Sidebar user={user} onOpenAuth={() => setAuthOpen(true)} onLogout={logout} />
+
+      <main className="flex-1 overflow-y-auto relative">
         <Hero onStart={scrollToForm} />
 
         <section id="analyzer" ref={formRef} className="max-w-6xl mx-auto px-6 md:px-10 py-20 md:py-28">
@@ -134,6 +157,8 @@ export default function AyurAI() {
         <History items={history} onDelete={handleDeleteHistory} />
         <Disclaimer />
       </main>
+
+      <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} onAuthSuccess={(u) => setUser(u)} />
     </div>
   );
 }
