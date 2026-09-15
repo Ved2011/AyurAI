@@ -310,16 +310,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           ) : (
             /* Register Step 2: 6-Digit OTP Form */
             <form onSubmit={handleVerifyOtp} className="space-y-5">
-              {demoOtp && (
-                <div className="p-3 rounded-xl bg-[#EAF3EC] border border-[#BCE1C5] text-xs text-[#2A5235]">
-                  <p className="font-semibold flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5" /> Demo Email Banner (from: donotreply.ayurai@gmail.com)
-                  </p>
-                  <p className="mt-1">
-                    Your 6-digit OTP code is: <span className="font-mono font-bold tracking-widest text-sm bg-white px-2 py-0.5 rounded border border-[#BCE1C5] text-[#1E2B21]">{demoOtp}</span>
-                  </p>
-                </div>
-              )}
 
               <div className="space-y-1.5">
                 <label className="block text-[10px] uppercase tracking-wider text-[#5A6960] font-semibold">Enter 6-Digit Verification Code</label>

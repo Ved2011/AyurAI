@@ -253,19 +253,87 @@ function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswe
   };
 }
 
+const nodemailer = require("nodemailer");
+
 // In-memory OTP store: { email: { otp: "123456", name, hashedPassword, expiresAt: timestamp } }
 const pendingRegistrations = new Map();
 
-// Helper to simulate/send OTP
-const sendOtpEmail = (email, otp) => {
-  const fromEmail = "donotreply.ayurai@gmail.com";
+// Configure nodemailer SMTP transporter
+// If SMTP credentials exist in env (SMTP_USER & SMTP_PASS), use Gmail/Custom SMTP.
+// Otherwise, create an Ethereal test account on the fly or log fallback.
+let transporter;
+
+if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: process.env.SMTP_SECURE === "true",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+} else {
+  // Create an automatic Ethereal test account for real SMTP email sending/viewing without credentials
+  nodemailer.createTestAccount().then((testAccount) => {
+    transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    console.log("[EMAIL SERVICE] Ethereal test SMTP transporter initialized for real email sending.");
+  }).catch((err) => {
+    console.error("[EMAIL SERVICE] Ethereal test account initialization failed:", err.message);
+  });
+}
+
+// Helper to send real OTP email
+const sendOtpEmail = async (email, otp) => {
+  const fromEmail = process.env.SMTP_FROM || "'AyurAI Verification' <donotreply.ayurai@gmail.com>";
+  const mailOptions = {
+    from: fromEmail,
+    to: email,
+    subject: `${otp} is your AyurAI Email Verification Code`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 12px;">
+        <h2 style="color: #3E6B4A; text-align: center;">AyurAI Verification Code</h2>
+        <p style="font-size: 14px; color: #4a4a4a;">Namaste,</p>
+        <p style="font-size: 14px; color: #4a4a4a;">Thank you for registering with AyurAI. Please use the following 6-digit OTP to verify your email address:</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <span style="font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1E2B21; background: #F0F7F2; padding: 12px 24px; border-radius: 8px; border: 1px solid #3E6B4A;">${otp}</span>
+        </div>
+        <p style="font-size: 12px; color: #888; text-align: center;">This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+      </div>
+    `,
+  };
+
   console.log(`\n==================================================`);
-  console.log(`[EMAIL SERVICE] From: ${fromEmail}`);
-  console.log(`[EMAIL SERVICE] To: ${email}`);
-  console.log(`[EMAIL SERVICE] Subject: Your AyurAI Verification Code`);
-  console.log(`[EMAIL SERVICE] Content: Your 6-digit OTP is: ${otp}`);
+  console.log(`[EMAIL SERVICE] Sending real email to: ${email}`);
+  console.log(`[EMAIL SERVICE] OTP: ${otp}`);
+
+  if (transporter) {
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`[EMAIL SERVICE] Email sent successfully! MessageId: ${info.messageId}`);
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      if (previewUrl) {
+        console.log(`[EMAIL SERVICE] Preview real email in browser: ${previewUrl}`);
+      }
+    } catch (err) {
+      console.error(`[EMAIL SERVICE] Error sending email:`, err);
+    }
+  } else {
+    console.log(`[EMAIL SERVICE] Transporter not ready yet, logged OTP to console.`);
+  }
   console.log(`==================================================\n`);
 };
+
+// In-memory fallback users collection when MongoDB is not connected
+const fallbackUsers = [];
 
 // ---------- Auth Routes ----------
 app.post("/api/auth/send-otp", async (req, res) => {
@@ -274,12 +342,17 @@ app.post("/api/auth/send-otp", async (req, res) => {
     return res.status(400).json({ detail: "Name, email, and password are required" });
   }
 
-  if (!db) return res.status(500).json({ detail: "Database unavailable" });
-
   try {
-    const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
-    if (existing) {
-      return res.status(400).json({ detail: "Email is already registered" });
+    if (db) {
+      const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
+      if (existing) {
+        return res.status(400).json({ detail: "Email is already registered" });
+      }
+    } else {
+      const existing = fallbackUsers.find((u) => u.email === email.toLowerCase());
+      if (existing) {
+        return res.status(400).json({ detail: "Email is already registered" });
+      }
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -293,9 +366,9 @@ app.post("/api/auth/send-otp", async (req, res) => {
       expiresAt,
     });
 
-    sendOtpEmail(email, otp);
+    await sendOtpEmail(email, otp);
 
-    res.json({ message: "Verification OTP sent to email", email: email.toLowerCase(), otpDemo: otp });
+    res.json({ message: "Verification OTP sent to email", email: email.toLowerCase() });
   } catch (err) {
     console.error("Error sending OTP:", err);
     res.status(500).json({ detail: "Failed to send verification OTP" });
@@ -333,7 +406,11 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       created_at: new Date().toISOString(),
     };
 
-    await db.collection("users").insertOne(newUser);
+    if (db) {
+      await db.collection("users").insertOne(newUser);
+    } else {
+      fallbackUsers.push(newUser);
+    }
     pendingRegistrations.delete(email.toLowerCase());
 
     const token = jwt.sign({ id: userId, email: newUser.email, name: newUser.name }, JWT_SECRET, { expiresIn: "30d" });
