@@ -666,13 +666,23 @@ app.post("/api/viruddha-check", (req, res) => {
   }
 });
 
-// ---------- Serve Pure HTML Static Files ----------
+// ---------- Serve Frontend Static Files & React SPA Fallback ----------
+const reactBuildPath = path.join(__dirname, "../frontend/build");
 const publicPath = path.join(__dirname, "public");
-app.use(express.static(publicPath));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
-});
+
+const fs = require("fs");
+if (fs.existsSync(reactBuildPath)) {
+  app.use(express.static(reactBuildPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(reactBuildPath, "index.html"));
+  });
+} else {
+  app.use(express.static(publicPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(publicPath, "index.html"));
+  });
+}
 
 app.listen(PORT, () => {
-  console.log(`AyurAI Classical Engine Node Server running on http://0.0.0.0:${PORT}`);
+  console.log(`AyurAI Unified Node Engine running on http://0.0.0.0:${PORT}`);
 });
