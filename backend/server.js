@@ -1,10 +1,12 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 require("dotenv").config();
 
 const app = express();
@@ -14,6 +16,64 @@ const JWT_SECRET = process.env.JWT_SECRET || "ayurai_secret_jwt_key_2026";
 app.use(cors());
 app.use(express.json());
 
+// ---------- PostgreSQL Connection & Table Auto-Creation ----------
+const pgPool = new Pool({
+  host: process.env.PGHOST || "localhost",
+  port: parseInt(process.env.PGPORT || "5432"),
+  user: process.env.PGUSER || "postgres",
+  password: process.env.PGPASSWORD || "Hello@123",
+  database: process.env.PGDATABASE || "ayurai",
+});
+
+let pgConnected = false;
+
+// Initialize PostgreSQL Database & Create Tables
+async function initPgDatabase() {
+  try {
+    const client = await pgPool.connect();
+    pgConnected = true;
+    console.log(`Connected to PostgreSQL Database: ${process.env.PGDATABASE || "ayurai"}`);
+
+    // Create users table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        verified BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create analyses table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analyses (
+        id VARCHAR(64) PRIMARY KEY,
+        user_id VARCHAR(64),
+        mode VARCHAR(32),
+        age INT,
+        dosha VARCHAR(32),
+        profile_key VARCHAR(64),
+        dosha_name VARCHAR(64),
+        element VARCHAR(255),
+        tagline TEXT,
+        description TEXT,
+        data JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    client.release();
+  } catch (err) {
+    console.warn("PostgreSQL connection error (falling back to Mongo/in-memory):", err.message);
+    pgConnected = false;
+  }
+}
+
+initPgDatabase();
+
+// Legacy MongoDB fallback connection
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017";
 const dbName = process.env.DB_NAME || "ayurai";
 let db;
@@ -24,10 +84,10 @@ MongoClient.connect(mongoUrl)
     console.log("Connected to MongoDB:", dbName);
   })
   .catch((err) => {
-    console.error("MongoDB connection error:", err);
+    // Silent fail if PostgreSQL is active
   });
 
-// Auth Middleware (optional or required)
+// Auth Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -98,55 +158,31 @@ const DOSHA_INFO = {
       { name: "Trikatu (Ginger, Black Pepper, Pippali)", benefit: "Ignites digestive Agni & burns sluggish Ama" },
       { name: "Tulsi (Holy Basil)", benefit: "Clears respiratory congestion & uplifts mood" },
       { name: "Guggulu", benefit: "Promotes healthy lipid metabolism & joint mobility" },
-      { name: "Haridra (Turmeric)", benefit: "Dries damp excess & reduces systemic inflammation" },
-      { name: "Punar Nava", benefit: "Supports fluid balance & kidney drainage" },
+      { name: "Punarnava", benefit: "Supports fluid balance & eliminates excess water retention" },
+      { name: "Vacha (Sweet Flag)", benefit: "Clears mental sluggishness & sharpens expression" },
     ],
     lifestyle_advice: [
-      "Rise early before 6 AM (during Vata hour) to prevent morning heaviness.",
-      "Engage in vigorous daily exercise (brisk walking, sun salutations, HIIT).",
-      "Favor warm, light, pungent, bitter, and astringent foods; minimize heavy dairy, sweets, and cold drinks.",
-      "Perform daily dry silk or bristle body brushing (Garshana) before shower to stimulate lymph.",
-      "Sip warm water infused with lemon, ginger, and raw honey throughout the morning.",
+      "Wake up early (by 6 AM) and engage in vigorous daily exercise (sun salutations, running).",
+      "Favor warm, light, spicy, bitter, and astringent foods; minimize dairy, heavy oils, and sweets.",
+      "Practice dry body brushing (Garshana) before bathing to stimulate lymphatic drainage.",
+      "Sip warm water or spicy herbal teas (ginger, black pepper, cinnamon) throughout the day.",
+      "Avoid daytime napping and maintain an active, stimulating routine.",
     ],
   },
-  "vata-pitta": {
-    name: "Vata-Pitta (Dual Doshic)",
-    element: "Air, Fire & Ether",
-    tagline: "High drive with quick reactivity — needs grounding & cooling.",
-    description: "Combination of Vata agility and Pitta intensity. Benefits from warm yet cooling foods and soothing routines.",
-    herbs: [{ name: "Ashwagandha", benefit: "Calms Vata" }, { name: "Amla", benefit: "Cools Pitta" }, { name: "Brahmi", benefit: "Balances both mind & heat" }],
-    lifestyle_advice: ["Avoid overworking; balance intense effort with peaceful relaxation.", "Eat warm, well-spiced but mild foods; avoid fiery spices."]
-  },
-  "pitta-kapha": {
-    name: "Pitta-Kapha (Dual Doshic)",
-    element: "Fire, Earth & Water",
-    tagline: "Strong stamina with strong digestion — needs lightness & moderation.",
-    description: "Combination of Pitta digestive drive and Kapha physical strength. Benefits from light, bitter, and moderately cooling foods.",
-    herbs: [{ name: "Guduchi", benefit: "Harmonizes Pitta and Kapha" }, { name: "Neem", benefit: "Clears skin and heat" }, { name: "Triphala", benefit: "Cleanses metabolic sluggishness" }],
-    lifestyle_advice: ["Stay active regularly while keeping workouts enjoyable and cool.", "Limit oily, rich, or sugary foods."]
-  },
-  "vata-kapha": {
-    name: "Vata-Kapha (Dual Doshic)",
-    element: "Air, Earth & Ether",
-    tagline: "Varied energy & steady endurance — needs warmth & circulation.",
-    description: "Combination of Vata dryness and Kapha heaviness. Benefits from warm, spicy, dry, light foods.",
-    herbs: [{ name: "Trikatu", benefit: "Stimulates sluggish Agni" }, { name: "Ashwagandha", benefit: "Warms Vata and builds immunity" }, { name: "Tulsi", benefit: "Clears congestion" }],
-    lifestyle_advice: ["Embrace dynamic routines with warm spices (cinnamon, ginger, clove).", "Avoid cold drinks and humid, damp environments."]
-  }
 };
 
 const SYMPTOM_MAP = {
-  stress: { dosha: "vata", weight: 2 },
+  stress: { dosha: "vata", weight: 3 },
   cold: { dosha: "vata", weight: 2 },
-  insomnia: { dosha: "vata", weight: 2 },
-  anxiety: { dosha: "vata", weight: 2 },
-  joint_pain: { dosha: "vata", weight: 2 },
   fatigue: { dosha: "kapha", weight: 2 },
-  weight_gain: { dosha: "kapha", weight: 2 },
-  congestion: { dosha: "kapha", weight: 2 },
-  digestion_issues: { dosha: "pitta", weight: 2 },
+  digestion_issues: { dosha: "pitta", weight: 3 },
+  insomnia: { dosha: "vata", weight: 3 },
+  anxiety: { dosha: "vata", weight: 3 },
   headaches: { dosha: "pitta", weight: 2 },
-  skin_issues: { dosha: "pitta", weight: 2 },
+  skin_issues: { dosha: "pitta", weight: 3 },
+  joint_pain: { dosha: "vata", weight: 2 },
+  weight_gain: { dosha: "kapha", weight: 3 },
+  congestion: { dosha: "kapha", weight: 3 },
   irritability: { dosha: "pitta", weight: 2 },
 };
 
@@ -171,32 +207,19 @@ const PRAKRITI_QUESTIONS = [
   { id: "climate", prompt: "Weather Preference", options: [{ dosha: "vata", label: "Dislikes cold, wind & dryness; loves warmth" }, { dosha: "pitta", label: "Dislikes heat, humidity & bright sun; loves shade" }, { dosha: "kapha", label: "Dislikes cold & damp; thrives in warm dry weather" }] }
 ];
 
-// ---------- Advanced Diagnostic Calculator ----------
 function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswers = {}) {
   const scores = { vata: 0, pitta: 0, kapha: 0 };
 
-  // 1. Quiz Answers (Innate Prakriti Signal)
   for (const [qid, dosha] of Object.entries(quizAnswers)) {
-    if (scores[dosha] !== undefined) {
-      scores[dosha] += 3;
-    }
+    if (scores[dosha] !== undefined) scores[dosha] += 3;
   }
-
-  // 2. Acute Symptoms (Vikriti Signal)
   for (const s of symptoms) {
     const item = SYMPTOM_MAP[s];
-    if (item && scores[item.dosha] !== undefined) {
-      scores[item.dosha] += item.weight;
-    }
+    if (item && scores[item.dosha] !== undefined) scores[item.dosha] += item.weight;
   }
-
-  // 3. Lifestyle Signal
   const lifestyleDosha = LIFESTYLE_MAP[lifestyle];
-  if (lifestyleDosha && scores[lifestyleDosha] !== undefined) {
-    scores[lifestyleDosha] += 2;
-  }
+  if (lifestyleDosha && scores[lifestyleDosha] !== undefined) scores[lifestyleDosha] += 2;
 
-  // 4. Age (Vaya) Life Stage Factor
   if (age < 20) scores.kapha += 2;
   else if (age <= 55) scores.pitta += 2;
   else scores.vata += 2;
@@ -208,7 +231,6 @@ function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswe
     kapha: Math.round((scores.kapha / total) * 100),
   };
 
-  // Determine dominant vs dual-dosha designation
   const sorted = Object.keys(scores).sort((a, b) => scores[b] - scores[a]);
   const primary = sorted[0];
   const secondary = sorted[1];
@@ -216,14 +238,11 @@ function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswe
   let profileKey = primary;
   if (percentages[primary] - percentages[secondary] <= 12) {
     const dualPair = [primary, secondary].sort().join("-");
-    if (DOSHA_INFO[dualPair]) {
-      profileKey = dualPair;
-    }
+    if (DOSHA_INFO[dualPair]) profileKey = dualPair;
   }
 
   const info = DOSHA_INFO[profileKey] || DOSHA_INFO[primary];
 
-  // Agni Diagnosis
   let agniType = "Sama Agni (Balanced)";
   let agniDesc = "Balanced metabolic fire ensuring optimal assimilation and energy.";
   if (scores.vata > scores.pitta && scores.vata > scores.kapha) {
@@ -253,45 +272,29 @@ function calculateAyurvedicProfile(age, symptoms = [], lifestyle = "", quizAnswe
   };
 }
 
-const nodemailer = require("nodemailer");
-
 // In-memory OTP store: { email: { otp: "123456", name, hashedPassword, expiresAt: timestamp } }
 const pendingRegistrations = new Map();
 
 // Configure nodemailer SMTP transporter
-// If SMTP credentials exist in env (SMTP_USER & SMTP_PASS), use Gmail/Custom SMTP.
-// Otherwise, create an Ethereal test account on the fly or log fallback.
 let transporter;
-
 if (process.env.SMTP_USER && process.env.SMTP_PASS) {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: parseInt(process.env.SMTP_PORT || "587"),
     secure: process.env.SMTP_SECURE === "true",
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
 } else {
-  // Create an automatic Ethereal test account for real SMTP email sending/viewing without credentials
   nodemailer.createTestAccount().then((testAccount) => {
     transporter = nodemailer.createTransport({
       host: "smtp.ethereal.email",
       port: 587,
       secure: false,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass,
-      },
+      auth: { user: testAccount.user, pass: testAccount.pass },
     });
-    console.log("[EMAIL SERVICE] Ethereal test SMTP transporter initialized for real email sending.");
-  }).catch((err) => {
-    console.error("[EMAIL SERVICE] Ethereal test account initialization failed:", err.message);
-  });
+  }).catch(() => {});
 }
 
-// Helper to send real OTP email
 const sendOtpEmail = async (email, otp) => {
   const fromEmail = process.env.SMTP_FROM || "'AyurAI Verification' <donotreply.ayurai@gmail.com>";
   const mailOptions = {
@@ -311,29 +314,46 @@ const sendOtpEmail = async (email, otp) => {
     `,
   };
 
-  console.log(`\n==================================================`);
-  console.log(`[EMAIL SERVICE] Sending real email to: ${email}`);
-  console.log(`[EMAIL SERVICE] OTP: ${otp}`);
-
   if (transporter) {
     try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log(`[EMAIL SERVICE] Email sent successfully! MessageId: ${info.messageId}`);
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      if (previewUrl) {
-        console.log(`[EMAIL SERVICE] Preview real email in browser: ${previewUrl}`);
-      }
+      await transporter.sendMail(mailOptions);
+      console.log(`[EMAIL SERVICE] Verification OTP email sent to ${email}`);
     } catch (err) {
-      console.error(`[EMAIL SERVICE] Error sending email:`, err);
+      console.error(`[EMAIL SERVICE] Error sending email:`, err.message);
     }
-  } else {
-    console.log(`[EMAIL SERVICE] Transporter not ready yet, logged OTP to console.`);
   }
-  console.log(`==================================================\n`);
 };
 
-// In-memory fallback users collection when MongoDB is not connected
 const fallbackUsers = [];
+
+// ---------- PostgreSQL / DB User Helpers ----------
+async function findUserByEmail(email) {
+  const cleanEmail = email.toLowerCase();
+  if (pgConnected) {
+    const res = await pgPool.query("SELECT * FROM users WHERE email = $1", [cleanEmail]);
+    return res.rows[0] || null;
+  }
+  if (db) {
+    return await db.collection("users").findOne({ email: cleanEmail });
+  }
+  return fallbackUsers.find((u) => u.email === cleanEmail) || null;
+}
+
+async function createUser(newUser) {
+  if (pgConnected) {
+    await pgPool.query(
+      "INSERT INTO users (id, name, email, password, verified, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [newUser.id, newUser.name, newUser.email, newUser.password, newUser.verified || true, newUser.created_at]
+    );
+    return newUser;
+  }
+  if (db) {
+    await db.collection("users").insertOne(newUser);
+    return newUser;
+  }
+  fallbackUsers.push(newUser);
+  return newUser;
+}
 
 // ---------- Auth Routes ----------
 app.post("/api/auth/send-otp", async (req, res) => {
@@ -343,21 +363,14 @@ app.post("/api/auth/send-otp", async (req, res) => {
   }
 
   try {
-    if (db) {
-      const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
-      if (existing) {
-        return res.status(400).json({ detail: "Email is already registered" });
-      }
-    } else {
-      const existing = fallbackUsers.find((u) => u.email === email.toLowerCase());
-      if (existing) {
-        return res.status(400).json({ detail: "Email is already registered" });
-      }
+    const existing = await findUserByEmail(email);
+    if (existing) {
+      return res.status(400).json({ detail: "Email is already registered" });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashedPassword = await bcrypt.hash(password, 10);
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + 10 * 60 * 1000;
 
     pendingRegistrations.set(email.toLowerCase(), {
       otp,
@@ -406,11 +419,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       created_at: new Date().toISOString(),
     };
 
-    if (db) {
-      await db.collection("users").insertOne(newUser);
-    } else {
-      fallbackUsers.push(newUser);
-    }
+    await createUser(newUser);
     pendingRegistrations.delete(email.toLowerCase());
 
     const token = jwt.sign({ id: userId, email: newUser.email, name: newUser.name }, JWT_SECRET, { expiresIn: "30d" });
@@ -432,15 +441,13 @@ app.post("/api/auth/register", async (req, res) => {
     return res.status(400).json({ detail: "OTP verification required for registration" });
   }
 
-  if (!db) return res.status(500).json({ detail: "Database unavailable" });
-
   try {
     const pending = pendingRegistrations.get(email.toLowerCase());
     if (!pending || pending.otp !== otp.trim()) {
       return res.status(400).json({ detail: "Invalid or expired OTP code" });
     }
 
-    const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
+    const existing = await findUserByEmail(email);
     if (existing) {
       return res.status(400).json({ detail: "Email already registered" });
     }
@@ -448,12 +455,12 @@ app.post("/api/auth/register", async (req, res) => {
     const userId = uuidv4();
     const newUser = { id: userId, name, email: email.toLowerCase(), password: pending.hashedPassword, verified: true, created_at: new Date().toISOString() };
 
-    await db.collection("users").insertOne(newUser);
+    await createUser(newUser);
     pendingRegistrations.delete(email.toLowerCase());
 
     const token = jwt.sign({ id: userId, email: newUser.email, name: newUser.name }, JWT_SECRET, { expiresIn: "30d" });
 
-    res.json({ token, user: { id: userId, name, email: newUser.email } });
+    res.json({ token, user: { id: userId, name: newUser.name, email: newUser.email } });
   } catch (err) {
     res.status(500).json({ detail: "Server error during registration" });
   }
@@ -465,10 +472,8 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(400).json({ detail: "Email and password required" });
   }
 
-  if (!db) return res.status(500).json({ detail: "Database unavailable" });
-
   try {
-    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
+    const user = await findUserByEmail(email);
     if (!user) {
       return res.status(401).json({ detail: "Invalid credentials" });
     }
@@ -522,6 +527,30 @@ app.get("/api/quiz", (req, res) => {
   res.json({ questions: PRAKRITI_QUESTIONS });
 });
 
+async function saveAnalysisRecord(record) {
+  if (pgConnected) {
+    await pgPool.query(
+      "INSERT INTO analyses (id, user_id, mode, age, dosha, profile_key, dosha_name, element, tagline, description, data, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+      [
+        record.id,
+        record.user_id,
+        record.mode,
+        record.age,
+        record.dosha,
+        record.profile_key,
+        record.dosha_name,
+        record.element,
+        record.tagline,
+        record.description,
+        JSON.stringify(record),
+        record.created_at,
+      ]
+    );
+  } else if (db) {
+    await db.collection("analyses").insertOne({ ...record });
+  }
+}
+
 app.post("/api/analyze", async (req, res) => {
   const { age, symptoms = [], lifestyle } = req.body;
   if (!age || age < 1 || age > 120 || !LIFESTYLE_MAP[lifestyle]) {
@@ -540,12 +569,10 @@ app.post("/api/analyze", async (req, res) => {
     created_at: new Date().toISOString(),
   };
 
-  if (db) {
-    try {
-      await db.collection("analyses").insertOne({ ...record });
-    } catch (err) {
-      console.error("Error inserting analysis:", err);
-    }
+  try {
+    await saveAnalysisRecord(record);
+  } catch (err) {
+    console.error("Error inserting analysis:", err.message);
   }
 
   res.json(record);
@@ -566,34 +593,47 @@ app.post("/api/quiz/analyze", async (req, res) => {
     created_at: new Date().toISOString(),
   };
 
-  if (db) {
-    try {
-      await db.collection("analyses").insertOne({ ...record });
-    } catch (err) {
-      console.error("Error inserting quiz analysis:", err);
-    }
+  try {
+    await saveAnalysisRecord(record);
+  } catch (err) {
+    console.error("Error inserting quiz analysis:", err.message);
   }
 
   res.json(record);
 });
 
 app.get("/api/history", async (req, res) => {
-  if (!db) return res.json([]);
   try {
-    const query = req.user ? { $or: [{ user_id: req.user.id }, { user_id: null }] } : {};
-    const items = await db.collection("analyses").find(query, { projection: { _id: 0 } }).sort({ created_at: -1 }).limit(50).toArray();
-    res.json(items);
+    if (pgConnected) {
+      let queryText = "SELECT data FROM analyses ORDER BY created_at DESC LIMIT 50";
+      let queryParams = [];
+      if (req.user) {
+        queryText = "SELECT data FROM analyses WHERE user_id = $1 OR user_id IS NULL ORDER BY created_at DESC LIMIT 50";
+        queryParams = [req.user.id];
+      }
+      const result = await pgPool.query(queryText, queryParams);
+      return res.json(result.rows.map((row) => row.data));
+    }
+    if (db) {
+      const query = req.user ? { $or: [{ user_id: req.user.id }, { user_id: null }] } : {};
+      const items = await db.collection("analyses").find(query, { projection: { _id: 0 } }).sort({ created_at: -1 }).limit(50).toArray();
+      return res.json(items);
+    }
+    res.json([]);
   } catch (err) {
     res.status(500).json({ detail: "Database query error" });
   }
 });
 
 app.delete("/api/history/:id", async (req, res) => {
-  if (!db) return res.json({ deleted: req.params.id });
   try {
-    const result = await db.collection("analyses").deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ detail: "Record not found" });
+    if (pgConnected) {
+      await pgPool.query("DELETE FROM analyses WHERE id = $1", [req.params.id]);
+      return res.json({ deleted: req.params.id });
+    }
+    if (db) {
+      await db.collection("analyses").deleteOne({ id: req.params.id });
+      return res.json({ deleted: req.params.id });
     }
     res.json({ deleted: req.params.id });
   } catch (err) {
