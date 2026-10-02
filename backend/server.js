@@ -644,12 +644,26 @@ app.delete("/api/history/:id", async (req, res) => {
 // ---------- Feature 11: Incompatible Food (Viruddha Ahara) Checker ----------
 app.post("/api/viruddha-check", (req, res) => {
   const { foodA = "", foodB = "" } = req.body;
+  
+  // Comprehensive Classical Viruddha Ahara Knowledge Base
   const pairs = [
-    { a: "milk", b: "fish", reason: "Opposing thermal energies — milk is cooling, fish is heating. Creates toxic Ama in blood." },
-    { a: "milk", b: "banana", reason: "Changes intestinal flora, produces toxins and causes cold/cough congestion." },
-    { a: "honey", b: "hot water", reason: "Heating honey alters its molecular structure, making it sticky and toxic (Ama) to channels." },
-    { a: "milk", b: "citrus", reason: "Acidic fruits curdle milk in stomach, halting digestive enzymes." },
-    { a: "ghee", b: "honey", reason: "Equal parts ghee and honey create incompatible metabolic reaction." },
+    { a: "milk", b: "fish", reason: "Opposing thermal energies (Virya) — milk is cooling (Sheeta), fish is heating (Ushna). Disturbs blood (Rakta Dhatu) and causes toxic Ama." },
+    { a: "milk", b: "banana", reason: "Alters gut flora, dampens digestive fire (Agni), and produces excess mucus/congestion." },
+    { a: "milk", b: "citrus", reason: "Acidic fruits (lemon, orange, grapefruit) curdle milk in stomach, causing indigestion and heartburn." },
+    { a: "milk", b: "salt", reason: "Salt with milk disturbs micro-circulatory channels (Srotas) and causes skin conditions." },
+    { a: "milk", b: "melon", reason: "Melons digest rapidly while milk requires longer processing, leading to stomach fermentation and gas." },
+    { a: "milk", b: "sour", reason: "Sour items curdle milk in digestion, causing toxic Ama buildup and Pitta flare-ups." },
+    { a: "honey", b: "hot water", reason: "Heating honey alters its complex sugars, making it sticky, heavy, and toxic to channels." },
+    { a: "honey", b: "ghee", reason: "Equal parts by weight of honey and ghee create incompatible metabolic friction (Samyoga Viruddha)." },
+    { a: "nightshade", b: "dairy", reason: "Combining nightshades (tomatoes, eggplant) with milk/cheese clogs circulatory channels." },
+    { a: "tomato", b: "milk", reason: "Acidic tomato curdles dairy proteins, causing sluggish Agni and bloating." },
+    { a: "yogurt", b: "fruit", reason: "Yogurt blocks channels while fruit ferments quickly, creating digestive toxins and congestion." },
+    { a: "curd", b: "night", reason: "Consuming curd/yogurt at night aggravates Kapha and Pitta, clogging respiratory channels." },
+    { a: "fruit", b: "meal", reason: "Fruits digest quickly; eating them right after heavy meals causes them to ferment in stomach." },
+    { a: "cheese", b: "fruit", reason: "Heavy cheese slows digestion while fruit ferments, disturbing digestive fire." },
+    { a: "radish", b: "milk", reason: "Pungent radish combined with milk creates intense opposing Virya." },
+    { a: "egg", b: "milk", reason: "Heavy animal proteins combined with dairy overwhelm the digestive Agni." },
+    { a: "fish", b: "yogurt", reason: "Heating fish with heavy channel-blocking curd generates severe toxins." },
   ];
 
   const fa = foodA.toLowerCase().trim();
