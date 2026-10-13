@@ -6,18 +6,72 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Dict
+from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timezone
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+class InMemoryDeleteResult:
+    def __init__(self, deleted_count: int):
+        self.deleted_count = deleted_count
+
+
+class InMemoryCursor:
+    def __init__(self, items: List[Dict[str, Any]]):
+        self._items = items
+
+    def sort(self, key: str, direction: int):
+        reverse = direction < 0
+        self._items = sorted(self._items, key=lambda item: item.get(key), reverse=reverse)
+        return self
+
+    def limit(self, count: int):
+        self._items = self._items[:count]
+        return self
+
+    async def to_list(self, length: int):
+        return self._items[:length]
+
+
+class InMemoryCollection:
+    def __init__(self):
+        self._items: List[Dict[str, Any]] = []
+
+    async def insert_one(self, doc: Dict[str, Any]):
+        self._items.append(doc)
+
+    def find(self, query=None, projection=None):
+        return InMemoryCursor([dict(item) for item in self._items])
+
+    async def delete_one(self, query: Dict[str, Any]):
+        record_id = query.get("id")
+        before = len(self._items)
+        self._items = [item for item in self._items if item.get("id") != record_id]
+        return InMemoryDeleteResult(before - len(self._items))
+
+
+class InMemoryDatabase:
+    def __init__(self):
+        self.analyses = InMemoryCollection()
+
+
+def create_database():
+    mongo_url = os.environ.get("MONGO_URL")
+    db_name = os.environ.get("DB_NAME")
+    if mongo_url and db_name:
+        client = AsyncIOMotorClient(mongo_url)
+        return client, client[db_name]
+
+    logger.warning("MONGO_URL or DB_NAME is not set; using in-memory storage for local development.")
+    return None, InMemoryDatabase()
+
+
+client, db = create_database()
 
 app = FastAPI(title="AyurAI")
 api_router = APIRouter(prefix="/api")
@@ -419,10 +473,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client is not None:
+        client.close()

@@ -6,7 +6,12 @@ import AyurAI from "@/pages/AyurAI";
 function App() {
   return (
     <div className="App grain">
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           <Route path="/" element={<AyurAI />} />
         </Routes>

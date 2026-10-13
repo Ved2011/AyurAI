@@ -1,5 +1,11 @@
-const DEFAULT_BACKEND_URL = "https://ayur-recommendations.preview.emergentagent.com";
-const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim() || DEFAULT_BACKEND_URL;
+const DEFAULT_BACKEND_URL =
+  process.env.NODE_ENV === "production"
+    ? ""
+    : "http://localhost:8000";
+const rawBackendUrl =
+  process.env.REACT_APP_BACKEND_URL !== undefined
+    ? process.env.REACT_APP_BACKEND_URL.trim()
+    : DEFAULT_BACKEND_URL;
 
 const normalizeBaseUrl = (value) => {
   if (!value) return "";
