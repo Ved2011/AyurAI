@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AyurAI — Classical Ayurvedic Health Suite</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts (Inter + Cormorant Garamond for display) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #F9F6F0;
+      color: #2C362F;
+    }
+    .font-display {
+      font-family: 'Cormorant Garamond', serif;
+    }
+    .tab-btn.active {
+      background-color: #2C362F;
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header / Navigation -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-[#F9F6F0]/90 border-b border-[#E2E4DF]">
+    <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="w-10 h-10 rounded-full bg-[#4A7C59] flex items-center justify-center text-white shadow-sm">
+          <i data-lucide="leaf" class="w-5 h-5"></i>
+        </span>
+        <span class="font-display text-3xl tracking-tight text-[#2C362F] font-bold">
+          Ayur<span class="italic font-normal text-[#4A7C59]">AI</span>
+        </span>
+      </div>
+
+      <nav class="hidden md:flex items-center gap-1 bg-[#ECEDE8] p-1.5 rounded-full border border-[#E2E4DF]" id="navTabs">
+        <button onclick="switchTab('welcome')" class="tab-btn px-4 py-2 rounded-full text-xs font-semibold active" id="tab-welcome">Overview</button>
+        <button onclick="switchTab('analyze')" class="tab-btn px-4 py-2 rounded-full text-xs font-semibold" id="tab-analyze">Dosha Diagnostic</button>
+        <button onclick="switchTab('routine')" class="tab-btn px-4 py-2 rounded-full text-xs font-semibold" id="tab-routine">Dinacharya</button>
+        <button onclick="switchTab('food')" class="tab-btn px-4 py-2 rounded-full text-xs font-semibold" id="tab-food">Food Compatibility</button>
+        <button onclick="switchTab('about')" class="tab-btn px-4 py-2 rounded-full text-xs font-semibold" id="tab-about">Ayurvedic Principles</button>
+      </nav>
+
+      <div class="flex items-center gap-3">
+        <button onclick="openAuthModal('login')" class="px-4 py-2 rounded-full bg-white border border-[#E2E4DF] text-xs font-semibold text-[#2C362F] hover:border-[#4A7C59]">Log In</button>
+        <button onclick="openAuthModal('register')" class="px-5 py-2 rounded-full bg-[#4A7C59] text-white text-xs font-semibold hover:bg-[#3B6347]">Register</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
+
+    <!-- PAGE 1: PURE INFORMATIONAL WELCOME PAGE -->
+    <section id="page-welcome" class="space-y-16">
+      <div class="text-center max-w-3xl mx-auto py-12">
+        <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#4A7C59]/10 text-[#4A7C59] text-xs font-semibold uppercase tracking-widest mb-6">
+          <i data-lucide="sparkles" class="w-4 h-4"></i> Classical Ayurvedic Science Meets AI
+        </span>
+        <h1 class="font-display text-5xl md:text-7xl leading-tight text-[#2C362F]">
+          Holistic Ayurvedic Diagnostics & Doshic Harmony
+        </h1>
+        <p class="mt-6 text-base md:text-lg text-[#5C6B61] leading-relaxed">
+          AyurAI is a digital health platform grounded in ancient classical Ayurvedic literature (*Charaka Samhita* & *Sushruta Samhita*). Learn your innate Prakriti constitution, evaluate acute Vikriti imbalances, and align your daily routine.
+        </p>
+        <div class="mt-10 flex flex-wrap justify-center gap-4">
+          <button onclick="openAuthModal('register')" class="px-8 py-4 rounded-full bg-[#2C362F] text-white font-semibold text-sm hover:bg-[#1e2520] transition-all shadow-md">
+            Create Free Account
+          </button>
+          <button onclick="switchTab('analyze')" class="px-8 py-4 rounded-full bg-white border border-[#E2E4DF] text-[#2C362F] font-semibold text-sm hover:border-[#4A7C59]">
+            Take Diagnostic Assessment
+          </button>
+        </div>
+      </div>
+
+      <!-- Capability Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="p-8 rounded-3xl bg-white border border-[#E2E4DF] shadow-sm">
+          <span class="w-12 h-12 rounded-2xl bg-[#4A7C59]/10 text-[#4A7C59] flex items-center justify-center mb-6">
+            <i data-lucide="activity" class="w-6 h-6"></i>
+          </span>
+          <h3 class="font-display text-2xl mb-2">Tridosha Evaluation</h3>
+          <p class="text-xs text-[#5C6B61]">Detailed breakdown of Vata (Air), Pitta (Fire), and Kapha (Earth) percentages.</p>
+        </div>
+
+        <div class="p-8 rounded-3xl bg-white border border-[#E2E4DF] shadow-sm">
+          <span class="w-12 h-12 rounded-2xl bg-[#4A7C59]/10 text-[#4A7C59] flex items-center justify-center mb-6">
+            <i data-lucide="clock" class="w-6 h-6"></i>
+          </span>
+          <h3 class="font-display text-2xl mb-2">Dinacharya Routines</h3>
+          <p class="text-xs text-[#5C6B61]">Hour-by-hour daily schedules synchronized with natural bio-rhythms.</p>
+        </div>
+
+        <div class="p-8 rounded-3xl bg-white border border-[#E2E4DF] shadow-sm">
+          <span class="w-12 h-12 rounded-2xl bg-[#C8624C]/10 text-[#C8624C] flex items-center justify-center mb-6">
+            <i data-lucide="utensils" class="w-6 h-6"></i>
+          </span>
+          <h3 class="font-display text-2xl mb-2">Viruddha Ahara Checker</h3>
+          <p class="text-xs text-[#5C6B61]">Checks food combination safety to prevent metabolic toxicity (Ama).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE 2: DOSHA DIAGNOSTIC FORM -->
+    <section id="page-analyze" class="hidden space-y-8">
+      <div class="text-center max-w-2xl mx-auto">
+        <span class="text-xs uppercase tracking-widest text-[#4A7C59] font-semibold">Step 01 — Diagnostic Input</span>
+        <h2 class="font-display text-4xl text-[#2C362F] mt-1">Dosha & Health Intake Form</h2>
+        <p class="text-xs text-[#5C6B61] mt-2">Evaluates age, active physical signals, pre-existing conditions, and lifestyle.</p>
+      </div>
+
+      <form id="doshaForm" onsubmit="handleAnalyzeSubmit(event)" class="bg-white border border-[#E2E4DF] rounded-3xl p-8 shadow-sm space-y-8">
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-[#5C6B61] mb-2 font-semibold">Your Age</label>
+          <input type="number" id="inputAge" min="1" max="120" required placeholder="e.g. 32" class="w-full md:w-48 text-3xl font-display bg-transparent border-b-2 border-[#E2E4DF] pb-2 focus:outline-none focus:border-[#4A7C59]" />
+        </div>
+
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-[#5C6B61] mb-3 font-semibold">Current Physical Signals (Symptoms)</label>
+          <div class="flex flex-wrap gap-2.5" id="symptomsGroup">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-[#5C6B61] mb-3 font-semibold">Pre-existing Medical History</label>
+          <div class="flex flex-wrap gap-2.5" id="conditionsGroup">
+            <button type="button" onclick="toggleSelection(this, 'cond')" data-val="hypertension" class="px-4 py-2 rounded-xl text-xs bg-[#F9F6F0] border border-[#E2E4DF]">High Blood Pressure</button>
+            <button type="button" onclick="toggleSelection(this, 'cond')" data-val="diabetes" class="px-4 py-2 rounded-xl text-xs bg-[#F9F6F0] border border-[#E2E4DF]">Diabetes</button>
+            <button type="button" onclick="toggleSelection(this, 'cond')" data-val="asthma" class="px-4 py-2 rounded-xl text-xs bg-[#F9F6F0] border border-[#E2E4DF]">Asthma</button>
+            <button type="button" onclick="toggleSelection(this, 'cond')" data-val="acid_reflux" class="px-4 py-2 rounded-xl text-xs bg-[#F9F6F0] border border-[#E2E4DF]">Chronic Acid Reflux</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-[#5C6B61] mb-3 font-semibold">Lifestyle Level</label>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button type="button" onclick="selectLifestyle('active')" id="life-active" class="life-btn text-left p-4 rounded-2xl border border-[#E2E4DF] bg-[#F9F6F0]">
+              <div class="font-display text-xl font-bold">Active</div>
+              <div class="text-xs text-[#5C6B61]">Daily movement & sports</div>
+            </button>
+            <button type="button" onclick="selectLifestyle('moderate')" id="life-moderate" class="life-btn text-left p-4 rounded-2xl border border-[#4A7C59] bg-[#4A7C59] text-white">
+              <div class="font-display text-xl font-bold">Moderate</div>
+              <div class="text-xs opacity-80">Balanced desk time & walking</div>
+            </button>
+            <button type="button" onclick="selectLifestyle('sedentary')" id="life-sedentary" class="life-btn text-left p-4 rounded-2xl border border-[#E2E4DF] bg-[#F9F6F0]">
+              <div class="font-display text-xl font-bold">Sedentary</div>
+              <div class="text-xs text-[#5C6B61]">Prolonged sitting</div>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full md:w-auto px-8 py-3.5 rounded-full bg-[#4A7C59] text-white font-semibold text-sm hover:bg-[#3B6347]">
+          Analyze My Dosha
+        </button>
+      </form>
+
+      <!-- RESULTS CONTAINER -->
+      <div id="resultsCard" class="hidden space-y-6">
+        <div id="doshaBanner" class="p-8 rounded-3xl text-white">
+          <span class="text-xs uppercase tracking-widest opacity-80" id="resultElement"></span>
+          <h2 class="font-display text-6xl font-bold mt-2" id="resultName"></h2>
+          <p class="text-sm opacity-90 mt-4 max-w-xl" id="resultDesc"></p>
+
+          <div class="mt-6 space-y-2 max-w-sm" id="doshaBars"></div>
+        </div>
+
+        <div class="p-6 rounded-3xl bg-white border border-[#E2E4DF]">
+          <h3 class="font-display text-2xl text-[#2C362F]">Recommended Herbs</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4" id="herbsList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE 3: DINACHARYA ROUTINE -->
+    <section id="page-routine" class="hidden space-y-8">
+      <div class="text-center max-w-2xl mx-auto">
+        <span class="text-xs uppercase tracking-widest text-[#4A7C59] font-semibold">Daily Biological Rhythms</span>
+        <h2 class="font-display text-4xl text-[#2C362F] mt-1">Dinacharya Routine Schedule</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="routineCards"></div>
+    </section>
+
+    <!-- PAGE 4: VIRUDDHA AHARA FOOD CHECKER -->
+    <section id="page-food" class="hidden space-y-8">
+      <div class="text-center max-w-2xl mx-auto">
+        <span class="text-xs uppercase tracking-widest text-[#C8624C] font-semibold">Food Combination Safety</span>
+        <h2 class="font-display text-4xl text-[#2C362F] mt-1">Viruddha Ahara Checker</h2>
+      </div>
+
+      <div class="bg-white border border-[#E2E4DF] rounded-3xl p-8">
+        <form onsubmit="handleFoodCheck(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <input type="text" id="foodA" required placeholder="First Ingredient (e.g. Milk)" class="p-3 bg-[#F9F6F0] border rounded-xl text-sm" />
+          <input type="text" id="foodB" required placeholder="Second Ingredient (e.g. Fish)" class="p-3 bg-[#F9F6F0] border rounded-xl text-sm" />
+          <button type="submit" class="bg-[#2C362F] text-white rounded-xl text-sm font-semibold py-3">Check Pair</button>
+        </form>
+        <div id="foodResult" class="mt-6 hidden p-4 rounded-xl border text-sm"></div>
+      </div>
+    </section>
+
+    <!-- PAGE 5: AYURVEDIC PRINCIPLES -->
+    <section id="page-about" class="hidden space-y-8">
+      <div class="text-center max-w-2xl mx-auto">
+        <span class="text-xs uppercase tracking-widest text-[#4A7C59] font-semibold">Ancient Wisdom</span>
+        <h2 class="font-display text-4xl text-[#2C362F] mt-1">Tridosha & Agni Fundamentals</h2>
+      </div>
+      <div class="bg-white border border-[#E2E4DF] rounded-3xl p-8 leading-relaxed space-y-4 text-sm text-[#5C6B61]">
+        <p>Ayurveda observes health through three fundamental energetic forces (Tridoshas): Vata (Air/Ether), Pitta (Fire/Water), and Kapha (Earth/Water).</p>
+        <p>When these forces exist in harmony with your natural genetic constitution (Prakriti), immunity (Ojas) and digestive fire (Agni) remain vibrant.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- AUTH MODAL -->
+  <div id="authModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-8 max-w-md w-full relative">
+      <button onclick="closeAuthModal()" class="absolute top-6 right-6 text-gray-400 hover:text-black">✕</button>
+      <h3 class="font-display text-3xl mb-2" id="authTitle">Log In</h3>
+      <form onsubmit="handleAuthSubmit(event)" class="space-y-4 mt-6">
+        <input type="email" id="authEmail" required placeholder="Email" class="w-full p-3 bg-[#F9F6F0] border rounded-xl text-sm" />
+        <input type="password" id="authPass" required placeholder="Password" class="w-full p-3 bg-[#F9F6F0] border rounded-xl text-sm" />
+        <button type="submit" class="w-full py-3 rounded-full bg-[#4A7C59] text-white text-sm font-semibold">Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let selectedSymptoms = [];
+    let selectedConditions = [];
+    let selectedLifestyleVal = "moderate";
+
+    function switchTab(tab) {
+      document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'bg-[#2C362F]', 'text-white'));
+      
+      const sec = document.getElementById(`page-${tab}`);
+      if (sec) sec.classList.remove('hidden');
+      
+      const btn = document.getElementById(`tab-${tab}`);
+      if (btn) btn.classList.add('active', 'bg-[#2C362F]', 'text-white');
+    }
+
+    function toggleSelection(btn, type) {
+      const val = btn.dataset.val;
+      if (type === 'sym') {
+        if (selectedSymptoms.includes(val)) {
+          selectedSymptoms = selectedSymptoms.filter(x => x !== val);
+          btn.classList.remove('bg-[#2C362F]', 'text-white');
+        } else {
+          selectedSymptoms.push(val);
+          btn.classList.add('bg-[#2C362F]', 'text-white');
+        }
+      } else if (type === 'cond') {
+        if (selectedConditions.includes(val)) {
+          selectedConditions = selectedConditions.filter(x => x !== val);
+          btn.classList.remove('bg-[#C8624C]', 'text-white');
+        } else {
+          selectedConditions.push(val);
+          btn.classList.add('bg-[#C8624C]', 'text-white');
+        }
+      }
+    }
+
+    function selectLifestyle(val) {
+      selectedLifestyleVal = val;
+      document.querySelectorAll('.life-btn').forEach(b => {
+        b.classList.remove('bg-[#4A7C59]', 'text-white');
+        b.classList.add('bg-[#F9F6F0]');
+      });
+      const btn = document.getElementById(`life-${val}`);
+      if (btn) {
+        btn.classList.remove('bg-[#F9F6F0]');
+        btn.classList.add('bg-[#4A7C59]', 'text-white');
+      }
+    }
+
+    async function loadOptions() {
+      try {
+        const res = await fetch('/api/options');
+        const data = await res.json();
+        const grp = document.getElementById('symptomsGroup');
+        grp.innerHTML = data.symptoms.map(s => `
+          <button type="button" onclick="toggleSelection(this, 'sym')" data-val="${s.id}" class="px-4 py-2 rounded-xl text-xs bg-[#F9F6F0] border border-[#E2E4DF]">${s.label}</button>
+        `).join('');
+      } catch (e) {}
+    }
+
+    async function handleAnalyzeSubmit(e) {
+      e.preventDefault();
+      const age = Number(document.getElementById('inputAge').value);
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ age, symptoms: selectedSymptoms, lifestyle: selectedLifestyleVal, conditions: selectedConditions })
+      });
+      const data = await res.json();
+      
+      const card = document.getElementById('resultsCard');
+      card.classList.remove('hidden');
+
+      const colors = { vata: '#D4A373', pitta: '#C8624C', kapha: '#4A7C59' };
+      document.getElementById('doshaBanner').style.backgroundColor = colors[data.dosha] || '#4A7C59';
+      document.getElementById('resultElement').innerText = data.element;
+      document.getElementById('resultName').innerText = data.dosha_name;
+      document.getElementById('resultDesc').innerText = data.description;
+
+      const bars = document.getElementById('doshaBars');
+      bars.innerHTML = Object.entries(data.percentages).map(([k, v]) => `
+        <div class="flex items-center gap-3 text-xs uppercase font-semibold">
+          <span class="w-12">${k}</span>
+          <div class="flex-1 h-2 bg-white/30 rounded-full overflow-hidden">
+            <div class="h-full bg-white" style="width:${v}%"></div>
+          </div>
+          <span>${v}%</span>
+        </div>
+      `).join('');
+
+      const herbs = document.getElementById('herbsList');
+      herbs.innerHTML = data.herbs.map(h => `
+        <div class="p-3 bg-[#F9F6F0] rounded-xl border">
+          <div class="font-semibold text-sm">${h.name}</div>
+          <div class="text-xs text-[#5C6B61]">${h.benefit}</div>
+        </div>
+      `).join('');
+    }
+
+    async function handleFoodCheck(e) {
+      e.preventDefault();
+      const foodA = document.getElementById('foodA').value;
+      const foodB = document.getElementById('foodB').value;
+      const res = await fetch('/api/viruddha-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foodA, foodB })
+      });
+      const data = await res.json();
+      const box = document.getElementById('foodResult');
+      box.classList.remove('hidden');
+      box.className = `mt-6 p-4 rounded-xl border text-sm ${data.compatible ? 'bg-[#4A7C59]/10 text-[#4A7C59] border-[#4A7C59]/30' : 'bg-[#C8624C]/10 text-[#C8624C] border-[#C8624C]/30'}`;
+      box.innerText = data.warning || data.message;
+    }
+
+    function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
+    function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
+    function handleAuthSubmit(e) { e.preventDefault(); closeAuthModal(); alert("Logged in successfully!"); }
+
+    window.onload = () => {
+      lucide.createIcons();
+      loadOptions();
+    };
+  </script>
+</body>
+</html>

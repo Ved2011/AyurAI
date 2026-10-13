@@ -8,19 +8,62 @@ const lifestyleDesc = {
   sedentary: "Mostly sitting, minimal movement",
 };
 
+const DEFAULT_SYMPTOMS = [
+  { id: "stress", label: "Stress" },
+  { id: "cold", label: "Cold hands/feet" },
+  { id: "fatigue", label: "Fatigue" },
+  { id: "digestion_issues", label: "Digestion issues" },
+  { id: "insomnia", label: "Insomnia" },
+  { id: "anxiety", label: "Anxiety" },
+  { id: "headaches", label: "Headaches" },
+  { id: "skin_issues", label: "Skin issues" },
+  { id: "joint_pain", label: "Joint pain" },
+  { id: "weight_gain", label: "Weight gain" },
+  { id: "congestion", label: "Congestion" },
+  { id: "irritability", label: "Irritability" },
+];
+
+const DEFAULT_LIFESTYLES = [
+  { id: "active", label: "Active" },
+  { id: "moderate", label: "Moderate" },
+  { id: "sedentary", label: "Sedentary" },
+];
+
+const COMMON_CONDITIONS = [
+  { id: "hypertension", label: "High Blood Pressure" },
+  { id: "diabetes", label: "Diabetes / High Blood Sugar" },
+  { id: "asthma", label: "Asthma / Breathing Issues" },
+  { id: "thyroid", label: "Thyroid Imbalance" },
+  { id: "acid_reflux", label: "Chronic Acid Reflux / GERD" },
+  { id: "ibs", label: "IBS / Irritable Bowel" },
+];
+
 export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
+  const symptomsList = options?.symptoms?.length > 0 ? options.symptoms : DEFAULT_SYMPTOMS;
+  const lifestylesList = options?.lifestyles?.length > 0 ? options.lifestyles : DEFAULT_LIFESTYLES;
+
   const [age, setAge] = useState("");
   const [symptoms, setSymptoms] = useState([]);
   const [lifestyle, setLifestyle] = useState("moderate");
+  const [conditions, setConditions] = useState([]);
+  const [allergies, setAllergies] = useState("");
+  const [medications, setMedications] = useState("");
 
   const toggleSymptom = (id) => {
     setSymptoms((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  };
+
+  const toggleCondition = (id) => {
+    setConditions((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   };
 
   const reset = () => {
     setAge("");
     setSymptoms([]);
     setLifestyle("moderate");
+    setConditions([]);
+    setAllergies("");
+    setMedications("");
     onReset && onReset();
   };
 
@@ -31,7 +74,7 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
       toast.error("Please enter a valid age (1-120)");
       return;
     }
-    onAnalyze({ age: n, symptoms, lifestyle });
+    onAnalyze({ age: n, symptoms, lifestyle, conditions, allergies, medications });
   };
 
   return (
@@ -61,7 +104,7 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
           Current signals ({symptoms.length} selected)
         </label>
         <div data-testid="symptom-group" className="flex flex-wrap gap-2.5">
-          {options.symptoms.map((s) => {
+          {symptomsList.map((s) => {
             const selected = symptoms.includes(s.id);
             return (
               <button
@@ -86,7 +129,7 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
       <div className="mb-10">
         <label className="block text-xs uppercase tracking-[0.22em] text-[#5C6B61] mb-4">Lifestyle</label>
         <div data-testid="lifestyle-group" className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {options.lifestyles.map((l) => {
+          {lifestylesList.map((l) => {
             const selected = lifestyle === l.id;
             return (
               <button
@@ -107,6 +150,57 @@ export default function DoshaForm({ options, loading, onAnalyze, onReset }) {
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* Pre-existing Conditions */}
+      <div className="mb-10">
+        <label className="block text-xs uppercase tracking-[0.22em] text-[#5C6B61] mb-2">
+          Pre-existing Conditions / Medical History
+        </label>
+        <p className="text-xs text-[#5C6B61] mb-4">Select any known diagnosed conditions for targeted herbal safety filtering.</p>
+        <div className="flex flex-wrap gap-2.5">
+          {COMMON_CONDITIONS.map((c) => {
+            const selected = conditions.includes(c.id);
+            return (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => toggleCondition(c.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-medium transition-all border ${
+                  selected
+                    ? "bg-[#C8624C] text-white border-[#C8624C] shadow-sm"
+                    : "bg-[#F9F6F0] text-[#2C362F] border-[#E2E4DF] hover:border-[#C8624C]"
+                }`}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Allergies & Medications */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div>
+          <label className="block text-xs uppercase tracking-[0.22em] text-[#5C6B61] mb-2">Known Allergies & Intolerances</label>
+          <input
+            type="text"
+            value={allergies}
+            onChange={(e) => setAllergies(e.target.value)}
+            placeholder="e.g. Dairy, Gluten, Nuts, Pollen"
+            className="w-full text-sm bg-[#F9F6F0] border border-[#E2E4DF] rounded-xl px-4 py-3 focus:outline-none focus:border-[#4A7C59]"
+          />
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-[0.22em] text-[#5C6B61] mb-2">Current Medications / Supplements</label>
+          <input
+            type="text"
+            value={medications}
+            onChange={(e) => setMedications(e.target.value)}
+            placeholder="e.g. Antacids, Thyroid meds, Multivitamins"
+            className="w-full text-sm bg-[#F9F6F0] border border-[#E2E4DF] rounded-xl px-4 py-3 focus:outline-none focus:border-[#4A7C59]"
+          />
         </div>
       </div>
 

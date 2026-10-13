@@ -6,8 +6,21 @@ import { apiUrl } from "@/lib/api";
 
 const DOSHA_COLOR = { vata: "#D4A373", pitta: "#C8624C", kapha: "#4A7C59" };
 
+const FALLBACK_QUESTIONS = [
+  { id: "body_frame", prompt: "Body frame", options: [{ dosha: "vata", label: "Thin, lean, hard to gain weight" }, { dosha: "pitta", label: "Medium, muscular, well-proportioned" }, { dosha: "kapha", label: "Large, sturdy, gains weight easily" }] },
+  { id: "weight_pattern", prompt: "Weight pattern", options: [{ dosha: "vata", label: "Light — fluctuates easily" }, { dosha: "pitta", label: "Moderate — stable with effort" }, { dosha: "kapha", label: "Heavy — gains quickly, loses slowly" }] },
+  { id: "skin", prompt: "Skin", options: [{ dosha: "vata", label: "Dry, rough, cool, thin" }, { dosha: "pitta", label: "Warm, reddish, sensitive, freckles/moles" }, { dosha: "kapha", label: "Soft, oily, thick, pale, smooth" }] },
+  { id: "hair", prompt: "Hair", options: [{ dosha: "vata", label: "Dry, frizzy, brittle, thin" }, { dosha: "pitta", label: "Fine, soft, early graying or balding" }, { dosha: "kapha", label: "Thick, oily, wavy, lustrous" }] },
+  { id: "eyes", prompt: "Eyes", options: [{ dosha: "vata", label: "Small, dry, active, dark" }, { dosha: "pitta", label: "Medium, sharp, penetrating" }, { dosha: "kapha", label: "Large, calm, moist, attractive" }] },
+  { id: "teeth", prompt: "Teeth", options: [{ dosha: "vata", label: "Uneven, gums recede, often sensitive" }, { dosha: "pitta", label: "Medium-sized, yellowish, prone to bleeding gums" }, { dosha: "kapha", label: "Large, white, strong, well-formed" }] },
+  { id: "appetite", prompt: "Appetite", options: [{ dosha: "vata", label: "Irregular — sometimes hungry, sometimes not" }, { dosha: "pitta", label: "Strong — intense hunger, gets irritable if skipped" }, { dosha: "kapha", label: "Slow but steady — can easily skip meals" }] },
+  { id: "thirst", prompt: "Thirst", options: [{ dosha: "vata", label: "Variable" }, { dosha: "pitta", label: "High — always reaching for water" }, { dosha: "kapha", label: "Low — rarely thirsty" }] },
+  { id: "digestion", prompt: "Digestion", options: [{ dosha: "vata", label: "Irregular, gas, bloating" }, { dosha: "pitta", label: "Strong, quick, occasional heartburn" }, { dosha: "kapha", label: "Slow, heavy after meals" }] },
+  { id: "sleep", prompt: "Sleep", options: [{ dosha: "vata", label: "Light, interrupted, 5–6 hours" }, { dosha: "pitta", label: "Moderate, sound, 6–8 hours" }, { dosha: "kapha", label: "Deep, heavy, 8+ hours, hard to wake" }] }
+];
+
 export default function PrakritiQuiz({ onResult }) {
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState(FALLBACK_QUESTIONS);
   const [answers, setAnswers] = useState({});
   const [age, setAge] = useState("");
   const [step, setStep] = useState(0); // 0 = age screen; 1..N = question index; N+1 = finish
@@ -16,8 +29,14 @@ export default function PrakritiQuiz({ onResult }) {
   useEffect(() => {
     axios
       .get(apiUrl("/quiz"))
-      .then(({ data }) => setQuestions(data.questions || []))
-      .catch(() => toast.error("Could not load quiz questions"));
+      .then(({ data }) => {
+        if (data.questions && data.questions.length > 0) {
+          setQuestions(data.questions);
+        }
+      })
+      .catch(() => {
+        // Keep fallback questions if API fails
+      });
   }, []);
 
   const total = questions.length;

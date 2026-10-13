@@ -8,8 +8,9 @@ import ResultsCard from "@/components/ayur/ResultsCard";
 import AboutAyurveda from "@/components/ayur/AboutAyurveda";
 import History from "@/components/ayur/History";
 import Disclaimer from "@/components/ayur/Disclaimer";
-import { Leaf } from "lucide-react";
 import { apiUrl } from "@/lib/api";
+import Sidebar from "@/components/layout/Sidebar";
+import AuthModal from "@/components/auth/AuthModal";
 
 export default function AyurAI() {
   const [options, setOptions] = useState({ symptoms: [], lifestyles: [] });
@@ -17,6 +18,8 @@ export default function AyurAI() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [mode, setMode] = useState("quick"); // 'quick' | 'quiz'
+  const [user, setUser] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const resultsRef = useRef(null);
   const formRef = useRef(null);
 
@@ -41,16 +44,20 @@ export default function AyurAI() {
   useEffect(() => {
     loadOptions();
     loadHistory();
+    const saved = localStorage.getItem("ayurai_user");
+    if (saved) { try { setUser(JSON.parse(saved)); } catch (e) {} }
   }, []);
 
-  const handleAnalyze = async ({ age, symptoms, lifestyle }) => {
+  const logout = () => {
+    localStorage.removeItem("ayurai_token");
+    localStorage.removeItem("ayurai_user");
+    setUser(null);
+  };
+
+  const handleAnalyze = async (formData) => {
     setLoading(true);
     try {
-      const { data } = await axios.post(apiUrl("/analyze"), {
-        age: Number(age),
-        symptoms,
-        lifestyle,
-      });
+      const { data } = await axios.post(apiUrl("/analyze"), formData);
       setResult(data);
       loadHistory();
       toast.success(`Your dominant dosha: ${data.dosha_name}`);
@@ -78,44 +85,21 @@ export default function AyurAI() {
     try {
       await axios.delete(apiUrl(`/history/${id}`));
       setHistory((h) => h.filter((x) => x.id !== id));
-      toast.success("Entry removed");
+      toast.success("Record deleted");
     } catch (e) {
-      toast.error("Could not delete");
+      toast.error("Could not delete record");
     }
   };
 
-  const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToForm = () => {
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
-    <div data-testid="ayurai-page" className="min-h-screen relative">
-      {/* Header */}
-      <header
-        data-testid="ayurai-header"
-        className="sticky top-0 z-30 backdrop-blur-md bg-[#F9F6F0]/75 border-b border-[#E2E4DF]"
-      >
-        <div className="max-w-6xl mx-auto px-6 md:px-10 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-9 h-9 rounded-full bg-[#4A7C59] flex items-center justify-center">
-              <Leaf className="w-5 h-5 text-white" />
-            </span>
-            <span className="font-display text-2xl tracking-tight">AyurAI</span>
-          </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-[#5C6B61]">
-            <a href="#analyzer" className="hover:text-[#2C362F]" data-testid="nav-analyzer">Analyzer</a>
-            <a href="#about" className="hover:text-[#2C362F]" data-testid="nav-about">About Ayurveda</a>
-            <a href="#history" className="hover:text-[#2C362F]" data-testid="nav-history">History</a>
-          </nav>
-          <button
-            data-testid="cta-header"
-            onClick={scrollToForm}
-            className="px-5 py-2 rounded-full bg-[#4A7C59] hover:bg-[#3B6347] text-white text-sm font-medium transition-all hover:-translate-y-0.5"
-          >
-            Begin analysis
-          </button>
-        </div>
-      </header>
+    <div data-testid="ayurai-page" className="flex min-h-screen bg-[#F8F5EF]">
+      <Sidebar user={user} onOpenAuth={() => setAuthOpen(true)} onLogout={logout} />
 
-      <main className="relative z-10">
+      <main className="flex-1 overflow-y-auto relative">
         <Hero onStart={scrollToForm} />
 
         <section id="analyzer" ref={formRef} className="max-w-6xl mx-auto px-6 md:px-10 py-20 md:py-28">
@@ -173,6 +157,8 @@ export default function AyurAI() {
         <History items={history} onDelete={handleDeleteHistory} />
         <Disclaimer />
       </main>
+
+      <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} onAuthSuccess={(u) => setUser(u)} />
     </div>
   );
 }
