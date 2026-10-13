@@ -64,6 +64,24 @@ async function initPgDatabase() {
       );
     `);
 
+    // Create food_items table for 3M+ scalability
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS food_items (
+        id VARCHAR(128) PRIMARY KEY,
+        name TEXT NOT NULL,
+        ingredients_raw TEXT,
+        potency VARCHAR(32),
+        tastes VARCHAR(128),
+        is_dairy BOOLEAN DEFAULT FALSE,
+        is_fermented BOOLEAN DEFAULT FALSE,
+        is_nightshade BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_food_items_potency ON food_items (potency);
+      CREATE INDEX IF NOT EXISTS idx_food_items_flags ON food_items (is_dairy, is_fermented, is_nightshade);
+    `);
+
     client.release();
   } catch (err) {
     console.warn("PostgreSQL connection error (falling back to Mongo/in-memory):", err.message);
@@ -679,6 +697,10 @@ app.post("/api/viruddha-check", (req, res) => {
     res.json({ compatible: true, message: "These foods are generally compatible under classical Ayurvedic rules." });
   }
 });
+
+// ---------- Ayurvedic Food Compatibility Engine (3M+ items, O(1) runtime evaluation) ----------
+const createAyurvedaRouter = require("./ayurvedaRoutes");
+app.use("/api/ayurveda", createAyurvedaRouter(pgPool));
 
 // ---------- Serve Frontend Static Files & React SPA Fallback ----------
 const reactBuildPath = path.join(__dirname, "../frontend/build");
