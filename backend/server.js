@@ -46,6 +46,14 @@ async function initPgDatabase() {
       );
     `);
 
+    // Seed hardcoded test user
+    const testPasswordHash = bcrypt.hashSync("test123", 10);
+    await client.query(`
+      INSERT INTO users (id, name, email, password, verified)
+      VALUES ('test-user-id-001', 'Test User', 'test@test.test', $1, true)
+      ON CONFLICT (email) DO UPDATE SET password = $1, verified = true;
+    `, [testPasswordHash]);
+
     // Create analyses table
     await client.query(`
       CREATE TABLE IF NOT EXISTS analyses (
@@ -342,11 +350,24 @@ const sendOtpEmail = async (email, otp) => {
   }
 };
 
-const fallbackUsers = [];
+const HARDCODED_TEST_USER = {
+  id: "test-user-id-001",
+  name: "Test User",
+  email: "test@test.test",
+  password: bcrypt.hashSync("test123", 10),
+  verified: true,
+  created_at: new Date().toISOString(),
+};
+
+const fallbackUsers = [HARDCODED_TEST_USER];
 
 // ---------- PostgreSQL / DB User Helpers ----------
 async function findUserByEmail(email) {
-  const cleanEmail = email.toLowerCase();
+  if (!email) return null;
+  const cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail === "test@test.test") {
+    return HARDCODED_TEST_USER;
+  }
   if (pgConnected) {
     const res = await pgPool.query("SELECT * FROM users WHERE email = $1", [cleanEmail]);
     return res.rows[0] || null;
