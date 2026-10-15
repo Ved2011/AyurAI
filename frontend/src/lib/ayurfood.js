@@ -3,17 +3,14 @@ import { apiUrl } from "@/lib/api";
 
 /**
  * ============================================================================
- * AyurFood Compatibility Client SDK
+ * AyurFood Compatibility Client SDK (Native In-Process Engine)
  * ============================================================================
- * Connects the frontend to the NumPy-accelerated Viruddha Ahara Engine &
- * Open Food Facts / NIIMH CCRAS pharmacological intelligence service.
+ * Connects the frontend to the native Viruddha Ahara Compatibility Engine
+ * grounded in NIIMH CCRAS, Charaka Samhita, and Open Food Facts.
  */
 
 /**
  * Checks compatibility between two food items or ingredients.
- * Leverages the NumPy matrix sidecar when available, with automatic
- * fallback to the embedded classical Ayurvedic rule engine.
- * 
  * @param {string} foodA - Name of the first food item (e.g., "Milk", "Honey", "Fish")
  * @param {string} foodB - Name of the second food item (e.g., "Melon", "Ghee", "Curd")
  * @returns {Promise<Object>} Compatibility report with Tridosha karma and violations
@@ -32,7 +29,7 @@ export async function checkCompatibility(foodA, foodB) {
  */
 export async function fetchProductByBarcode(barcode) {
   const cleanBarcode = String(barcode).trim();
-  const { data } = await axios.get(apiUrl(`/ayurfood/product/${cleanBarcode}`));
+  const { data } = await axios.get(apiUrl(`/compatibility/product/${cleanBarcode}`));
   return data;
 }
 
@@ -45,7 +42,7 @@ export async function fetchProductByBarcode(barcode) {
  * @returns {Promise<Object>} Full report with score, violations, and remediation advice
  */
 export async function evaluateMeal(items, isHeated = false, isNightTime = false) {
-  const { data } = await axios.post(apiUrl("/ayurfood/evaluate"), {
+  const { data } = await axios.post(apiUrl("/compatibility/evaluate"), {
     items,
     is_heated: isHeated,
     is_night_time: isNightTime,
@@ -54,22 +51,22 @@ export async function evaluateMeal(items, isHeated = false, isNightTime = false)
 }
 
 /**
- * Runs the NumPy high-speed combinatorial matrix benchmark.
- * Evaluates millions of random food pairings at vectorized C-speed.
+ * Runs the high-speed combinatorial matrix benchmark.
+ * Evaluates millions of random food pairings using the native O(1) TypedArray matrix.
  * 
- * @param {number} [total=100000] - Total combinatorial pairs to evaluate
- * @returns {Promise<{total_tested: number, compatible: number, incompatible: number, duration_seconds: number, throughput_combos_sec: number}>}
+ * @param {number} [total=1000000] - Total combinatorial pairs to evaluate
+ * @returns {Promise<Object>} Benchmark metrics
  */
-export async function runBenchmark(total = 100000) {
-  const { data } = await axios.post(apiUrl(`/ayurfood/benchmark?total=${total}`));
+export async function runBenchmark(total = 1000000) {
+  const { data } = await axios.post(apiUrl(`/compatibility/benchmark`), { count: total });
   return data;
 }
 
 /**
- * Checks connectivity to the AyurFood brain microservice and displays health metadata.
- * @returns {Promise<{gateway: string, ayurfood_service: Object}>}
+ * Fetches canonical NIIMH dravyas for search and autocomplete.
+ * @returns {Promise<Array>} List of canonical dravyas
  */
-export async function getAyurFoodHealth() {
-  const { data } = await axios.get(apiUrl("/ayurfood/health"));
+export async function getDravyas() {
+  const { data } = await axios.get(apiUrl("/compatibility/dravyas"));
   return data;
 }

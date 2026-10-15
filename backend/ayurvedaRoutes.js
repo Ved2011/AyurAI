@@ -1,46 +1,15 @@
 const express = require("express");
-const http = require("http");
-const { spawn } = require("child_process");
-const fs = require("fs");
-const path = require("path");
 const { Pool } = require("pg");
-
-const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
-
-// Auto-check and auto-spawn the Python NumPy Brain if not already running
-function autoEnsureBrainOnline() {
-  const checkUrl = `${AYURFOOD_SERVICE_URL}/api/v1/health`;
-  fetch(checkUrl)
-    .then((r) => {
-      if (r.ok) console.log("🌿 [AyurFood Engine] Python NumPy Brain is verified online at " + AYURFOOD_SERVICE_URL);
-    })
-    .catch(() => {
-      const candidates = [
-        path.join(__dirname, "..", "ayurfood_api_server.py"),
-        path.join(__dirname, "ayurfood_api_server.py"),
-      ];
-      const target = candidates.find((p) => fs.existsSync(p));
-      if (target) {
-        try {
-          const brain = spawn("python3", [target], {
-            env: { ...process.env, PORT: "8001", PYTHONUNBUFFERED: "1" },
-            stdio: "ignore",
-            detached: true,
-          });
-          brain.unref();
-          console.log(`🚀 [AyurFood Engine] Auto-launched background Python matrix brain on port 8001 (PID: ${brain.pid})`);
-        } catch (e) {
-          console.warn("⚠️ Could not auto-spawn AyurFood Python engine:", e.message);
-        }
-      }
-    });
-}
-
-// Trigger auto-check on module load
-autoEnsureBrainOnline();
+const {
+  CANONICAL_DRAVYAS,
+  offMapper,
+  combinatorialEngine,
+  evaluateMeal,
+} = require("./services/ayurFoodCompatibilityEngine");
 
 /**
  * Creates and returns the Ayurveda Compatibility Express Router
+ * Completely native, in-process, zero Python dependencies.
  * @param {Pool} [injectedPool] - Optional PostgreSQL client pool
  */
 function createAyurvedaRouter(injectedPool) {
@@ -56,68 +25,61 @@ function createAyurvedaRouter(injectedPool) {
       database: process.env.PGDATABASE || "ayurai",
     });
 
-  // Helper for microservice fetch with timeout
-  async function callMicroservice(endpoint, options = {}) {
-    const url = `${AYURFOOD_SERVICE_URL}${endpoint}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
-    try {
-      const res = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json", ...options.headers },
-      });
-      clearTimeout(timeout);
-      if (!res.ok) {
-        const errText = await res.text();
-        const error = new Error(`AyurFood Engine Error (${res.status}): ${errText}`);
-        error.status = res.status;
-        throw error;
-      }
-      return await res.json();
-    } catch (err) {
-      clearTimeout(timeout);
-      throw err;
-    }
-  }
-
-  // 1. Health check
-  router.get("/health", async (req, res) => {
-    try {
-      const health = await callMicroservice("/api/v1/health");
-      res.json({
-        gateway: "healthy",
-        microservice: health,
-        postgres: pool ? "connected" : "fallback",
-      });
-    } catch (err) {
-      res.status(502).json({
-        gateway: "degraded",
-        microservice_status: "offline",
-        message: "Python AyurFood brain microservice is unreachable at " + AYURFOOD_SERVICE_URL,
-        error: err.message,
-      });
-    }
+  // 1. Engine Health Check
+  router.get("/health", (req, res) => {
+    const mem = process.memoryUsage();
+    res.json({
+      gateway: "healthy",
+      engine: "native_in_process",
+      matrix_type: "Uint8Array_Symmetric_O(1)",
+      dravya_count: CANONICAL_DRAVYAS.length,
+      memory_rss_mb: (mem.rss / (1024 * 1024)).toFixed(2),
+      memory_heap_mb: (mem.heapUsed / (1024 * 1024)).toFixed(2),
+      scientific_grounding: "NIIMH CCRAS / Charaka Samhita Sutrasthana 26",
+      postgres: pool ? "connected" : "fallback",
+    });
   });
 
-  // 2. Meal Compatibility Evaluation (NumPy O(1) Matrix)
+  // 2. Meal Compatibility Evaluation
   router.post("/evaluate", async (req, res) => {
     try {
-      const { items, is_heated, is_night_time, save_analysis, user_id } = req.body;
+      const { items, context = {}, is_heated, is_night_time, save_analysis, user_id } = req.body;
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: "Missing or invalid 'items' array." });
       }
 
-      // Call Python engine
-      const report = await callMicroservice("/api/v1/compatibility/evaluate", {
-        method: "POST",
-        body: JSON.stringify({
-          items,
-          is_heated: !!is_heated,
-          is_night_time: !!is_night_time,
-        }),
-      });
+      const resolvedItems = [];
+      const unresolved = [];
+
+      for (const it of items) {
+        const rawQuery = typeof it === "string" ? it : it.name_or_tag || it.name || it.tag || "";
+        const grams = typeof it === "object" ? Number(it.quantity_grams || it.quantity || 100) : 100;
+        const dravya = offMapper.resolve(rawQuery);
+
+        if (dravya) {
+          resolvedItems.push({
+            dravya,
+            quantity_grams: isNaN(grams) ? 100 : grams,
+          });
+        } else {
+          unresolved.push(rawQuery);
+        }
+      }
+
+      if (resolvedItems.length === 0) {
+        return res.status(404).json({
+          error: "None of the submitted items could be resolved to canonical Ayurvedic dravyas.",
+          unresolved_items: unresolved,
+        });
+      }
+
+      const evalOptions = {
+        is_heated: Boolean(context.is_heated !== undefined ? context.is_heated : is_heated),
+        is_night_time: Boolean(context.is_night_time !== undefined ? context.is_night_time : is_night_time),
+        user_dosha: context.user_dosha || null,
+      };
+
+      const report = evaluateMeal(resolvedItems, evalOptions);
 
       // Persist to PostgreSQL analyses table if requested
       const targetUserId = req.user?.id || user_id;
@@ -127,14 +89,23 @@ function createAyurvedaRouter(injectedPool) {
             `INSERT INTO analyses (user_id, input_data, result, is_compatible, score)
              VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT DO NOTHING`,
-            [targetUserId, JSON.stringify(items), JSON.stringify(report), report.is_compatible, report.compatibility_score]
+            [
+              targetUserId,
+              JSON.stringify(items),
+              JSON.stringify(report),
+              report.is_compatible,
+              report.compatibility_score,
+            ]
           )
           .catch((err) => console.warn("Analysis DB log bypassed:", err.message));
       }
 
-      res.json(report);
+      return res.json({
+        ...report,
+        unresolved_items: unresolved.length > 0 ? unresolved : undefined,
+      });
     } catch (err) {
-      res.status(err.status || 500).json({
+      res.status(500).json({
         error: "Failed to evaluate meal compatibility",
         details: err.message,
       });
@@ -155,44 +126,68 @@ function createAyurvedaRouter(injectedPool) {
           const cached = await pool.query("SELECT * FROM food_items WHERE id = $1", [barcode]);
           if (cached.rows.length > 0) {
             const item = cached.rows[0];
-            const report = await callMicroservice("/api/v1/compatibility/evaluate", {
-              method: "POST",
-              body: JSON.stringify({
-                items: [{ name_or_tag: item.name, quantity_grams: 100 }],
-              }),
-            });
-            return res.json({
-              barcode,
-              product_name: item.name,
-              compatibility_report: report,
-              source: "postgres_cache",
-            });
+            const dravya = offMapper.resolve(item.name);
+            if (dravya) {
+              const report = evaluateMeal([{ dravya, quantity_grams: 100 }]);
+              return res.json({
+                barcode,
+                product_name: item.name,
+                compatibility_report: report,
+                source: "postgres_cache",
+              });
+            }
           }
         } catch (dbErr) {
           console.warn("DB cache lookup bypassed:", dbErr.message);
         }
       }
 
-      // Fallback to Open Food Facts live lookup in microservice
-      const productReport = await callMicroservice(
-        `/api/v1/compatibility/product/${encodeURIComponent(barcode)}`
-      );
+      // Live lookup via Open Food Facts API v2
+      const product = await offMapper.fetchProduct(barcode);
+      const dravyas = offMapper.mapToDravyas(product);
+
+      if (dravyas.length === 0) {
+        const fallbackD = offMapper.resolve(product.product_name);
+        if (fallbackD) dravyas.push(fallbackD);
+      }
+
+      const items = dravyas.map((d) => ({
+        dravya: d,
+        quantity_grams: d.default_serving_grams || 100,
+      }));
+
+      const report = evaluateMeal(items);
 
       // Cache product in PostgreSQL food_items
-      if (pool && productReport.product_name) {
+      if (pool && product.product_name) {
         pool
           .query(
             `INSERT INTO food_items (id, name, ingredients_raw)
              VALUES ($1, $2, $3)
              ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = CURRENT_TIMESTAMP`,
-            [barcode, productReport.product_name, JSON.stringify(productReport)]
+            [barcode, product.product_name, JSON.stringify(product)]
           )
           .catch(() => {});
       }
 
-      res.json(productReport);
+      return res.json({
+        barcode,
+        product_name: product.product_name,
+        brands: product.brands,
+        image_url: product.image_url,
+        nova_group: product.nova_group,
+        detected_ingredients: dravyas.map((d) => ({
+          id: d.id,
+          name_common: d.name_common,
+          name_sanskrit: d.name_sanskrit,
+          category: d.category,
+          virya: d.virya,
+          vipaka: d.vipaka,
+        })),
+        compatibility_report: report,
+      });
     } catch (err) {
-      res.status(err.status || 500).json({
+      res.status(500).json({
         error: "Failed to resolve product barcode",
         details: err.message,
       });
@@ -200,23 +195,42 @@ function createAyurvedaRouter(injectedPool) {
   });
 
   // 4. High-Speed Combinatorial Benchmark
-  router.post("/benchmark", async (req, res) => {
+  router.post("/benchmark", (req, res) => {
     try {
-      const total = parseInt(req.query.total || req.body.total || "1000000", 10);
-      const benchmark = await callMicroservice(
-        `/api/v1/combinations/benchmark?total=${total}`,
-        { method: "POST" }
-      );
-      res.json(benchmark);
+      const total = parseInt(req.query.total || req.body.total || req.body.count || "1000000", 10);
+      const benchmark = combinatorialEngine.testBatch(Math.min(total, 10000000));
+      res.json({
+        engine: "AyurFood O(1) Matrix Benchmark",
+        authoritative_grounding: "NIIMH CCRAS / Charaka Samhita Sutrasthana 26",
+        ...benchmark,
+      });
     } catch (err) {
-      res.status(err.status || 500).json({
+      res.status(500).json({
         error: "Failed to run benchmark",
         details: err.message,
       });
     }
   });
 
-  // 5. Compatibility Route for 2 DB items (legacy & fast lookup)
+  // 5. Canonical Dravyas List
+  router.get("/dravyas", (req, res) => {
+    res.json({
+      total: CANONICAL_DRAVYAS.length,
+      dravyas: CANONICAL_DRAVYAS.map((d) => ({
+        id: d.id,
+        name_common: d.name_common,
+        name_sanskrit: d.name_sanskrit,
+        category: d.category,
+        rasa: d.rasa,
+        virya: d.virya,
+        vipaka: d.vipaka,
+        charaka_citation: d.charaka_citation,
+        openfoodfacts_tags: d.openfoodfacts_tags,
+      })),
+    });
+  });
+
+  // 6. Compatibility Route for 2 DB items (legacy & fast lookup)
   router.get("/check-compatibility", async (req, res) => {
     const { item1_id, item2_id } = req.query;
 
@@ -245,17 +259,14 @@ function createAyurvedaRouter(injectedPool) {
       const item1 = result.rows.find((r) => r.id === String(item1_id));
       const item2 = result.rows.find((r) => r.id === String(item2_id));
 
-      // Delegate to Python brain for rich canonical evaluation
-      try {
-        const report = await callMicroservice("/api/v1/compatibility/evaluate", {
-          method: "POST",
-          body: JSON.stringify({
-            items: [
-              { name_or_tag: item1.name, quantity_grams: 100 },
-              { name_or_tag: item2.name, quantity_grams: 100 },
-            ],
-          }),
-        });
+      const dA = offMapper.resolve(item1.name);
+      const dB = offMapper.resolve(item2.name);
+
+      if (dA && dB) {
+        const report = evaluateMeal([
+          { dravya: dA, quantity_grams: 100 },
+          { dravya: dB, quantity_grams: 100 },
+        ]);
         return res.json({
           compatible: report.is_compatible,
           score: report.compatibility_score,
@@ -265,28 +276,27 @@ function createAyurvedaRouter(injectedPool) {
           warnings: report.violations.map((v) => `${v.sanskrit_rule}: ${v.pathophysiology}`),
           full_report: report,
         });
-      } catch (microErr) {
-        const p1 = (item1.potency || "").toLowerCase();
-        const p2 = (item2.potency || "").toLowerCase();
-        const n1 = (item1.name || "").toLowerCase();
-        const n2 = (item2.name || "").toLowerCase();
-        const isFruitWord = (s) => /\b(fruit|apple|apples|banana|mango|melon|orange|lemon|berry|berries|strawberry|pear|peach|grape|papaya)\b/i.test(s);
-        const viryaConflict = (p1 === "hot" && p2 === "cold") || (p1 === "cold" && p2 === "hot");
-        const dairyNightshade = (item1.is_dairy && item2.is_nightshade) || (item2.is_dairy && item1.is_nightshade);
-        const dairyFruit = (item1.is_dairy && isFruitWord(n2)) || (item2.is_dairy && isFruitWord(n1));
-        const warnings = [];
-        if (viryaConflict) warnings.push(`Virya conflict between ${item1.name} and ${item2.name}`);
-        if (dairyNightshade) warnings.push(`Dairy and nightshade conflict between ${item1.name} and ${item2.name}`);
-        if (dairyFruit) warnings.push(`Sarvāṇi ca phala-kṣīrāṇi viruddhāni (Charaka 26:84): Dairy is incompatible with fruit (${item1.name} and ${item2.name})`);
-
-        return res.json({
-          compatible: warnings.length === 0,
-          item1,
-          item2,
-          warnings,
-          source: "fallback_engine",
-        });
       }
+
+      // Fallback based on column attributes if not in canonical taxonomy
+      const p1 = (item1.potency || "").toLowerCase();
+      const p2 = (item2.potency || "").toLowerCase();
+      const viryaConflict = (p1 === "hot" && p2 === "cold") || (p1 === "cold" && p2 === "hot");
+      const dairyNightshade =
+        (item1.is_dairy && item2.is_nightshade) || (item2.is_dairy && item1.is_nightshade);
+      const warnings = [];
+      if (viryaConflict) warnings.push(`Virya conflict between ${item1.name} and ${item2.name}`);
+      if (dairyNightshade)
+        warnings.push(`Dairy and nightshade conflict between ${item1.name} and ${item2.name}`);
+
+      return res.json({
+        compatible: warnings.length === 0,
+        score: warnings.length === 0 ? 100 : 40,
+        item1,
+        item2,
+        warnings,
+        source: "attribute_fallback",
+      });
     } catch (err) {
       res.status(500).json({ error: "Database error", details: err.message });
     }
