@@ -1,5 +1,11 @@
 const express = require("express");
+const http = require("http");
 const { Pool } = require("pg");
+
+const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8000";
+
+// HTTP Agent with keep-alive for low-latency microservice requests
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
 
 /**
  * Creates and returns the Ayurveda Compatibility Express Router
@@ -8,7 +14,6 @@ const { Pool } = require("pg");
 function createAyurvedaRouter(injectedPool) {
   const router = express.Router();
 
-  // Use injected pool or create an internal connection pool
   const pool =
     injectedPool ||
     new Pool({
@@ -19,80 +24,177 @@ function createAyurvedaRouter(injectedPool) {
       database: process.env.PGDATABASE || "ayurai",
     });
 
-  /**
-   * Dynamic O(1) Ayurvedic Viruddha Ahara Evaluation Engine
-   * Evaluates compatibility at runtime without storing pre-computed combinations.
-   */
-  function evaluateCompatibility(item1, item2) {
-    const warnings = [];
+  // Helper for microservice fetch with timeout
+  async function callMicroservice(endpoint, options = {}) {
+    const url = `${AYURFOOD_SERVICE_URL}${endpoint}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
 
-    // 1. Virya Viruddha (Potency Conflict): Hot + Cold
-    const p1 = (item1.potency || "").toLowerCase();
-    const p2 = (item2.potency || "").toLowerCase();
-    if ((p1 === "hot" && p2 === "cold") || (p1 === "cold" && p2 === "hot")) {
-      warnings.push(
-        `Virya Viruddha (Opposing Potency Conflict): "${item1.name}" (${p1.toUpperCase()} potency) consumed with "${item2.name}" (${p2.toUpperCase()} potency). Consuming contrasting metabolic potencies confuses digestive Agni and precipitates Ama (toxic systemic sludge).`
-      );
+    try {
+      const res = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", ...options.headers },
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        const errText = await res.text();
+        const error = new Error(`AyurFood Engine Error (${res.status}): ${errText}`);
+        error.status = res.status;
+        throw error;
+      }
+      return await res.json();
+    } catch (err) {
+      clearTimeout(timeout);
+      throw err;
     }
-
-    // 2. Samyoga Viruddha: Dairy + Nightshade (Solanaceae)
-    if (
-      (item1.is_dairy && item2.is_nightshade) ||
-      (item2.is_dairy && item1.is_nightshade)
-    ) {
-      const dairyItem = item1.is_dairy ? item1.name : item2.name;
-      const nightshadeItem = item1.is_nightshade ? item1.name : item2.name;
-      warnings.push(
-        `Samyoga Viruddha (Dairy & Nightshade Incompatibility): "${dairyItem}" (dairy) paired with "${nightshadeItem}" (nightshade family). Nightshade solanine alkaloids bind with milk proteins, obstructing cellular Srotas (micro-channels) and provoking Pitta-Kapha skin conditions.`
-      );
-    }
-
-    // 3. Rasa/Karma Viruddha: Dairy + Sour / Fermented
-    const item1Sour = (item1.tastes || "").includes("sour") || item1.is_fermented;
-    const item2Sour = (item2.tastes || "").includes("sour") || item2.is_fermented;
-    if ((item1.is_dairy && item2Sour) || (item2.is_dairy && item1Sour)) {
-      const dairyItem = item1.is_dairy ? item1.name : item2.name;
-      const sourItem = item1.is_dairy ? item2.name : item1.name;
-      warnings.push(
-        `Rasa Viruddha (Dairy & Fermented/Sour Incompatibility): Combining dairy ("${dairyItem}") with sour or fermented substances ("${sourItem}") curdles casein proteins in the stomach, producing toxic metabolic residue.`
-      );
-    }
-
-    // 4. Matra/Guna Viruddha: Dual Extreme Fermented Foods
-    if (item1.is_fermented && item2.is_fermented) {
-      warnings.push(
-        `Matra/Guna Viruddha (Dual Fermented Conflict): Both "${item1.name}" and "${item2.name}" are fermented. Ingesting multiple fermented foods simultaneously excessively overheats Rakta Dhatu (blood tissue) and irritates digestion.`
-      );
-    }
-
-    return {
-      compatible: warnings.length === 0,
-      warnings,
-    };
   }
 
-  /**
-   * GET /check-compatibility?item1_id=X&item2_id=Y
-   * Queries the database for two individual food items and dynamically evaluates compatibility.
-   */
+  // 1. Health check
+  router.get("/health", async (req, res) => {
+    try {
+      const health = await callMicroservice("/api/v1/health");
+      res.json({
+        gateway: "healthy",
+        microservice: health,
+        postgres: pool ? "connected" : "fallback",
+      });
+    } catch (err) {
+      res.status(502).json({
+        gateway: "degraded",
+        microservice_status: "offline",
+        message: "Python AyurFood brain microservice is unreachable at " + AYURFOOD_SERVICE_URL,
+        error: err.message,
+      });
+    }
+  });
+
+  // 2. Meal Compatibility Evaluation (NumPy O(1) Matrix)
+  router.post("/evaluate", async (req, res) => {
+    try {
+      const { items, is_heated, is_night_time, save_analysis, user_id } = req.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "Missing or invalid 'items' array." });
+      }
+
+      // Call Python engine
+      const report = await callMicroservice("/api/v1/compatibility/evaluate", {
+        method: "POST",
+        body: JSON.stringify({
+          items,
+          is_heated: !!is_heated,
+          is_night_time: !!is_night_time,
+        }),
+      });
+
+      // Persist to PostgreSQL analyses table if requested
+      const targetUserId = req.user?.id || user_id;
+      if (pool && targetUserId && save_analysis !== false) {
+        pool
+          .query(
+            `INSERT INTO analyses (user_id, input_data, result, is_compatible, score)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT DO NOTHING`,
+            [targetUserId, JSON.stringify(items), JSON.stringify(report), report.is_compatible, report.compatibility_score]
+          )
+          .catch((err) => console.warn("Analysis DB log bypassed:", err.message));
+      }
+
+      res.json(report);
+    } catch (err) {
+      res.status(err.status || 500).json({
+        error: "Failed to evaluate meal compatibility",
+        details: err.message,
+      });
+    }
+  });
+
+  // 3. Barcode Scanner / Open Food Facts Resolution with Postgres Caching
+  router.get("/product/:barcode", async (req, res) => {
+    try {
+      const { barcode } = req.params;
+      if (!barcode || !/^\d+$/.test(barcode.trim())) {
+        return res.status(400).json({ error: "Invalid barcode parameter." });
+      }
+
+      // Check PostgreSQL local cache first
+      if (pool) {
+        try {
+          const cached = await pool.query("SELECT * FROM food_items WHERE id = $1", [barcode]);
+          if (cached.rows.length > 0) {
+            const item = cached.rows[0];
+            const report = await callMicroservice("/api/v1/compatibility/evaluate", {
+              method: "POST",
+              body: JSON.stringify({
+                items: [{ name_or_tag: item.name, quantity_grams: 100 }],
+              }),
+            });
+            return res.json({
+              barcode,
+              product_name: item.name,
+              compatibility_report: report,
+              source: "postgres_cache",
+            });
+          }
+        } catch (dbErr) {
+          console.warn("DB cache lookup bypassed:", dbErr.message);
+        }
+      }
+
+      // Fallback to Open Food Facts live lookup in microservice
+      const productReport = await callMicroservice(
+        `/api/v1/compatibility/product/${encodeURIComponent(barcode)}`
+      );
+
+      // Cache product in PostgreSQL food_items
+      if (pool && productReport.product_name) {
+        pool
+          .query(
+            `INSERT INTO food_items (id, name, ingredients_raw)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = CURRENT_TIMESTAMP`,
+            [barcode, productReport.product_name, JSON.stringify(productReport)]
+          )
+          .catch(() => {});
+      }
+
+      res.json(productReport);
+    } catch (err) {
+      res.status(err.status || 500).json({
+        error: "Failed to resolve product barcode",
+        details: err.message,
+      });
+    }
+  });
+
+  // 4. High-Speed Combinatorial Benchmark
+  router.post("/benchmark", async (req, res) => {
+    try {
+      const total = parseInt(req.query.total || req.body.total || "1000000", 10);
+      const benchmark = await callMicroservice(
+        `/api/v1/combinations/benchmark?total=${total}`,
+        { method: "POST" }
+      );
+      res.json(benchmark);
+    } catch (err) {
+      res.status(err.status || 500).json({
+        error: "Failed to run benchmark",
+        details: err.message,
+      });
+    }
+  });
+
+  // 5. Compatibility Route for 2 DB items (legacy & fast lookup)
   router.get("/check-compatibility", async (req, res) => {
     const { item1_id, item2_id } = req.query;
 
     if (!item1_id || !item2_id) {
       return res.status(400).json({
         error: "Missing required query parameters: 'item1_id' and 'item2_id' are both required.",
-        example: "/api/ayurveda/check-compatibility?item1_id=101&item2_id=202",
-      });
-    }
-
-    if (item1_id === item2_id) {
-      return res.status(400).json({
-        error: "Invalid request: item1_id and item2_id cannot be identical.",
       });
     }
 
     try {
-      // Query both items in a single indexed query
       const query = `
         SELECT id, name, ingredients_raw, potency, tastes, is_dairy, is_fermented, is_nightshade
         FROM food_items
@@ -101,59 +203,56 @@ function createAyurvedaRouter(injectedPool) {
       `;
       const result = await pool.query(query, [String(item1_id), String(item2_id)]);
 
-      if (result.rows.length === 0) {
+      if (result.rows.length < 2) {
         return res.status(404).json({
-          error: "Neither item was found in the database.",
-          requested_ids: [item1_id, item2_id],
+          error: "One or both items not found in food_items table.",
+          found_count: result.rows.length,
         });
       }
 
       const item1 = result.rows.find((r) => r.id === String(item1_id));
       const item2 = result.rows.find((r) => r.id === String(item2_id));
 
-      if (!item1) {
-        return res.status(404).json({
-          error: `Item with id '${item1_id}' was not found in the database.`,
+      // Delegate to Python brain for rich canonical evaluation
+      try {
+        const report = await callMicroservice("/api/v1/compatibility/evaluate", {
+          method: "POST",
+          body: JSON.stringify({
+            items: [
+              { name_or_tag: item1.name, quantity_grams: 100 },
+              { name_or_tag: item2.name, quantity_grams: 100 },
+            ],
+          }),
+        });
+        return res.json({
+          compatible: report.is_compatible,
+          score: report.compatibility_score,
+          composite_status: report.composite_status,
+          item1: { id: item1.id, name: item1.name },
+          item2: { id: item2.id, name: item2.name },
+          warnings: report.violations.map((v) => `${v.sanskrit_rule}: ${v.pathophysiology}`),
+          full_report: report,
+        });
+      } catch (microErr) {
+        // In-memory fallback if microservice is temporarily down
+        const p1 = (item1.potency || "").toLowerCase();
+        const p2 = (item2.potency || "").toLowerCase();
+        const viryaConflict = (p1 === "hot" && p2 === "cold") || (p1 === "cold" && p2 === "hot");
+        const dairyNightshade = (item1.is_dairy && item2.is_nightshade) || (item2.is_dairy && item1.is_nightshade);
+        const warnings = [];
+        if (viryaConflict) warnings.push(`Virya conflict between ${item1.name} and ${item2.name}`);
+        if (dairyNightshade) warnings.push(`Dairy and nightshade conflict between ${item1.name} and ${item2.name}`);
+
+        return res.json({
+          compatible: warnings.length === 0,
+          item1,
+          item2,
+          warnings,
+          source: "fallback_engine",
         });
       }
-
-      if (!item2) {
-        return res.status(404).json({
-          error: `Item with id '${item2_id}' was not found in the database.`,
-        });
-      }
-
-      // Perform dynamic runtime evaluation (O(1))
-      const evaluation = evaluateCompatibility(item1, item2);
-
-      return res.json({
-        compatible: evaluation.compatible,
-        item1: {
-          id: item1.id,
-          name: item1.name,
-          potency: item1.potency,
-          tastes: item1.tastes,
-          is_dairy: item1.is_dairy,
-          is_fermented: item1.is_fermented,
-          is_nightshade: item1.is_nightshade,
-        },
-        item2: {
-          id: item2.id,
-          name: item2.name,
-          potency: item2.potency,
-          tastes: item2.tastes,
-          is_dairy: item2.is_dairy,
-          is_fermented: item2.is_fermented,
-          is_nightshade: item2.is_nightshade,
-        },
-        warnings: evaluation.warnings,
-      });
     } catch (err) {
-      console.error("Error evaluating Ayurvedic compatibility:", err);
-      return res.status(500).json({
-        error: "Internal database error while evaluating compatibility.",
-        details: err.message,
-      });
+      res.status(500).json({ error: "Database error", details: err.message });
     }
   });
 

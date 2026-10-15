@@ -681,8 +681,46 @@ app.delete("/api/history/:id", async (req, res) => {
 });
 
 // ---------- Feature 11: Incompatible Food (Viruddha Ahara) Checker ----------
-app.post("/api/viruddha-check", (req, res) => {
+app.post("/api/viruddha-check", async (req, res) => {
   const { foodA = "", foodB = "" } = req.body;
+  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8000";
+
+  // Try NumPy AyurFood Compatibility Brain first
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const mRes = await fetch(AYURFOOD_SERVICE_URL + "/api/v1/compatibility/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        items: [
+          { name_or_tag: foodA, quantity_grams: 100 },
+          { name_or_tag: foodB, quantity_grams: 100 }
+        ]
+      })
+    });
+    clearTimeout(timeout);
+    if (mRes.ok) {
+      const report = await mRes.json();
+      if (!report.is_compatible && report.violations && report.violations.length > 0) {
+        const topV = report.violations[0];
+        return res.json({
+          compatible: false,
+          warning: "Viruddha Ahara Incompatibility! " + topV.sanskrit_rule + ": " + topV.pathophysiology,
+          details: report
+        });
+      } else if (report.is_compatible) {
+        return res.json({
+          compatible: true,
+          message: "These foods are harmonious and compatible under classical Ayurvedic rules.",
+          details: report
+        });
+      }
+    }
+  } catch (e) {
+    // Fall through to classical offline pairs
+  }
   
   // Comprehensive Classical Viruddha Ahara Knowledge Base
   const pairs = [

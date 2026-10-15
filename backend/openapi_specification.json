@@ -1,0 +1,60 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AyurFood Viruddha Ahara Compatibility API",
+    "description": "High-Performance Ayurvedic Nutritional Intelligence API using Open Food Facts & NIIMH",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/compatibility/evaluate": {
+      "post": {
+        "summary": "Evaluate Custom Meal Combination",
+        "operationId": "evaluate_custom_api_v1_compatibility_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": { "type": "array", "items": { "type": "object" } },
+                  "is_heated": { "type": "boolean", "default": false },
+                  "is_night_time": { "type": "boolean", "default": false }
+                },
+                "required": ["items"]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": { "200": { "description": "Successful Response" } }
+      }
+    },
+    "/api/v1/compatibility/product/{barcode}": {
+      "get": {
+        "summary": "Evaluate Open Food Facts Product by Barcode",
+        "operationId": "eval_product_api_v1_compatibility_product__barcode__get",
+        "parameters": [
+          { "name": "barcode", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Successful Response" } }
+      }
+    },
+    "/api/v1/combinations/benchmark": {
+      "post": {
+        "summary": "Run High-Speed Combinatorial Benchmark",
+        "operationId": "run_benchmark_api_v1_combinations_benchmark_post",
+        "parameters": [
+          { "name": "total", "in": "query", "required": false, "schema": { "type": "integer", "default": 1000000 } }
+        ],
+        "responses": { "200": { "description": "Successful Response" } }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health and Capacity Check",
+        "operationId": "health_api_v1_health_get",
+        "responses": { "200": { "description": "Successful Response" } }
+      }
+    }
+  }
+}
