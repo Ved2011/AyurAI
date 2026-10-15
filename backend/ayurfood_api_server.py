@@ -156,7 +156,7 @@ CANONICAL_DRAVYAS: List[Dravya] = [
            rasa=[Rasa.MADHURA], guna=[Guna.GURU, Guna.SNIGDHA], virya=Virya.SHEETA, vipaka=Vipaka.MADHURA,
            dosha_karma=DoshaVector(vata=-1, pitta=-1, kapha=0), niimh_id="NIIMH-DRAVYA-00404",
            charaka_citation="Charaka Samhita Sutrasthana 27:125",
-           openfoodfacts_tags=["en:apple", "en:mango", "en:pear"]),
+           openfoodfacts_tags=["en:apple", "en:apples", "en:mango", "en:pear", "en:peaches", "en:strawberries", "en:berries", "en:fruits", "apple", "apples", "mango", "pear", "peach", "strawberry", "berries", "fruit"]),
     Dravya(id=9, name_sanskrit="Moolaka", name_common="Radish", category=FoodCategory.LEGUME_RADISH,
            rasa=[Rasa.KATU], guna=[Guna.LAGHU, Guna.TIKSHNA], virya=Virya.USHNA, vipaka=Vipaka.KATU,
            dosha_karma=DoshaVector(vata=-1, pitta=1, kapha=-1), niimh_id="NIIMH-DRAVYA-00501",
@@ -239,11 +239,29 @@ class OpenFoodFactsMapper:
 
     def resolve(self, text: str) -> Optional[Dravya]:
         t = text.strip().lower()
+        if not t:
+            return None
+        # 1. Exact match in tag dictionary
         if t in self._tag_to_id:
             return CANONICAL_DRAVYAS[self._tag_to_id[t]]
+        # 2. Check tag containment
+        for tag, did in self._tag_to_id.items():
+            if len(tag) >= 3 and (tag in t or t in tag):
+                return CANONICAL_DRAVYAS[did]
+        # 3. Check common and sanskrit names
         for d in CANONICAL_DRAVYAS:
-            if t in d.name_common.lower() or t in d.name_sanskrit.lower():
+            c = d.name_common.lower()
+            s = d.name_sanskrit.lower()
+            if t in c or c in t or t in s:
                 return d
+        # 4. Word-token matching
+        tokens = re.findall(r'[a-zA-Z]+', t)
+        for tok in tokens:
+            if tok in self._tag_to_id:
+                return CANONICAL_DRAVYAS[self._tag_to_id[tok]]
+            for tag, did in self._tag_to_id.items():
+                if len(tag) >= 3 and (tok == tag or tag in tok or tok in tag):
+                    return CANONICAL_DRAVYAS[did]
         return None
 
     def fetch_product(self, barcode: str) -> Dict[str, Any]:
@@ -296,11 +314,12 @@ class CompatibilityReport(BaseModel):
     remediation_advice: List[str]
 
 PAIRWISE_SAMYOGA_RULES = {
-    frozenset({FoodCategory.DAIRY_MILK, FoodCategory.FISH_SEAFOOD}): (
-        5, "Matsyān payasā saha na abhyavaharet", "Charaka Samhita Sutrasthana 26:82-83",
-        "Opposing Virya (Milk Sheeta vs Fish Ushna); both Madhura Vipaka causing severe channel blockage (Mahabhishyandi).",
-        "Vitiates blood tissue (Rakta Dushti), triggers chronic skin disorders (Kushtha/Vitiligo) and toxic Ama-visha.",
-        "Strictly avoid; maintain at least 4-6 hours interval between milk and seafood."
+    # 1. Milk + All Fruits (Universal Incompatibility: Sarvāṇi ca phala-kṣīrāṇi viruddhāni)
+    frozenset({FoodCategory.DAIRY_MILK, FoodCategory.FRUIT_SWEET}): (
+        5, "Sarvāṇi ca phala-kṣīrāṇi viruddhāni (All fruits with milk are incompatible)", "Charaka Samhita Sutrasthana 26:84 & Astanga Hridaya Sutrasthana 7:39",
+        "Even sweet fruits like apples, mangoes, pears, and berries possess fruit enzymes and acids that immediately curdle milk caseins in the stomach. The conflicting digestive breakdown extinguishes digestive fire (Mandagni) and generates toxic Ama.",
+        "Triggers sluggish digestion, acute bloating, acid reflux, respiratory mucus congestion, and systemic skin disorders (Kushtha).",
+        "Strictly avoid combining milk with any fruit. Consume fruits solo with a 2-hour separation from dairy."
     ),
     frozenset({FoodCategory.DAIRY_MILK, FoodCategory.FRUIT_SOUR}): (
         5, "Amla phala dugdha samyoga", "Charaka Samhita Sutrasthana 26:84",
@@ -315,10 +334,16 @@ PAIRWISE_SAMYOGA_RULES = {
         "Eat melons completely alone."
     ),
     frozenset({FoodCategory.DAIRY_MILK, FoodCategory.FRUIT_BANANA}): (
-        4, "Kadali phala ksheera samyoga", "Charaka Samhita Sutrasthana 26:84",
+        5, "Kadali phala ksheera samyoga", "Charaka Samhita Sutrasthana 26:84",
         "Banana possesses sour Vipaka conflicting with sweet milk Vipaka; dulls Agni and congests lymphatic srotas.",
         "Respiratory and sinus congestion, allergies, lethargy, heavy Ama.",
-        "If consumed, add digestive spices (cardamom, cinnamon, nutmeg)."
+        "Never blend bananas into milkshakes or smoothies."
+    ),
+    frozenset({FoodCategory.DAIRY_MILK, FoodCategory.FISH_SEAFOOD}): (
+        5, "Matsyān payasā saha na abhyavaharet", "Charaka Samhita Sutrasthana 26:82-83",
+        "Opposing Virya (Milk Sheeta vs Fish Ushna); both Madhura Vipaka causing severe channel blockage (Mahabhishyandi).",
+        "Vitiates blood tissue (Rakta Dushti), triggers chronic skin disorders (Kushtha/Vitiligo) and toxic Ama-visha.",
+        "Strictly avoid; maintain at least 4-6 hours interval between milk and seafood."
     ),
     frozenset({FoodCategory.DAIRY_MILK, FoodCategory.SPICE_SALT}): (
         4, "Lavana ksheera viruddham", "Charaka Samhita Sutrasthana 26:83",
@@ -326,12 +351,78 @@ PAIRWISE_SAMYOGA_RULES = {
         "Kushtha (dermatoses), fluid retention, hair loss, and inflammatory blood vitiation.",
         "Never cook milk preparations with mineral or table salt."
     ),
+    frozenset({FoodCategory.DAIRY_MILK, FoodCategory.VEGETABLE_NIGHTSHADE}): (
+        5, "Vartaka dugdha viruddham", "Bhavaprakasha Nighantu & Charaka 26:84",
+        "Nightshade alkaloids (solanine) interact with milk proteins to congest micro-circulatory channels (Srotorodha).",
+        "Aggravates Pitta and Kapha, leading to chronic skin disorders and sluggish elimination.",
+        "Do not cook milk or cheese with tomatoes, eggplants, or bell peppers."
+    ),
+    frozenset({FoodCategory.DAIRY_MILK, FoodCategory.LEGUME_RADISH}): (
+        5, "Moolaka dugdha viruddham", "Charaka Samhita Sutrasthana 26:83",
+        "Pungent heating radish combined with sweet cooling milk creates violent opposing Virya conflict.",
+        "Severe vitiation of blood tissue (Rakta Dushti) and systemic skin disorders (Kushtha).",
+        "Maintain strict separation between radish and milk products."
+    ),
     frozenset({FoodCategory.DAIRY_CURD, FoodCategory.FISH_SEAFOOD}): (
         5, "Dadhi matsya viruddham", "Charaka Samhita Sutrasthana 26:84",
         "Both are potent Ushna Virya and channel-blocking (Abhishyandi) Pitta-Rakta provocateurs.",
         "Severe skin inflammation, urticaria, liver overload, deep channel obstruction.",
         "Prohibit marinating fish in yogurt."
-    )
+    ),
+    frozenset({FoodCategory.DAIRY_CURD, FoodCategory.FRUIT_SWEET}): (
+        5, "Dadhi-phala viruddham", "Charaka Samhita Sutrasthana 26:84",
+        "Yogurt / curd blocks channels (Abhishyandi) while fruit ferments rapidly, generating toxic metabolic sludge (Ama).",
+        "Sinus congestion, sluggish lymphatic drainage, allergic skin reactions, and digestive toxicity.",
+        "Never blend fresh fruits into yogurt, curd, or fruit raitas."
+    ),
+    frozenset({FoodCategory.DAIRY_CURD, FoodCategory.FRUIT_SOUR}): (
+        5, "Dadhi-amla phala viruddham", "Charaka Samhita Sutrasthana 26:84",
+        "Sour fruits with sour curd generate extreme Pitta-Rakta provocation and heat up the gut lining.",
+        "Hyperacidity, heartburn, bile stagnation, and inflammatory skin flare-ups.",
+        "Avoid sour fruits with yogurt."
+    ),
+    frozenset({FoodCategory.DAIRY_CURD, FoodCategory.FRUIT_BANANA}): (
+        5, "Dadhi-kadali viruddham", "Charaka Samhita Sutrasthana 26:84",
+        "Heavy cold yogurt combined with dense sweet-sour banana severely suppresses digestive Agni and produces thick Kapha toxins.",
+        "Severe lethargy, sinus congestion, coated tongue, and impaired metabolism.",
+        "Eat bananas separate from yogurt."
+    ),
+    frozenset({FoodCategory.DAIRY_CHEESE, FoodCategory.FRUIT_SWEET}): (
+        4, "Kilata-phala viruddham", "Charaka Samhita Sutrasthana 27:238",
+        "Heavy fermented cheese takes hours to digest, while fruit sugars ferment and putrefy in the upper GI tract.",
+        "Gas, bloating, severe indigestion, and endotoxin buildup.",
+        "Avoid pairing cheeses with fresh fruits."
+    ),
+    frozenset({FoodCategory.DAIRY_CURD, FoodCategory.FRUIT_MELON}): (
+        5, "Dadhi-kharbuja viruddham", "Charaka Samhita Sutrasthana 26:84-85",
+        "Fast-digesting cooling melons ferment rapidly when stalled behind heavy channel-blocking curd.",
+        "Severe gas, toxic Ama, and gut inflammation.",
+        "Never consume melons with curd or yogurt."
+    ),
+    frozenset({FoodCategory.DAIRY_CHEESE, FoodCategory.FRUIT_SOUR}): (
+        5, "Kilata-amla phala viruddham", "Charaka Samhita Sutrasthana 27:238",
+        "Sour acids curdle fermented cheese proteins and overtax digestive enzymes.",
+        "Heartburn, acidity, and toxic buildup.",
+        "Avoid cheese with sour fruits."
+    ),
+    frozenset({FoodCategory.DAIRY_CHEESE, FoodCategory.FRUIT_BANANA}): (
+        5, "Kilata-kadali viruddham", "Charaka Samhita Sutrasthana 26:84 & 27:238",
+        "Extremely dense, heavy combination that suppresses Agni and blocks micro-channels.",
+        "Chronic lethargy, mucus, and bloating.",
+        "Avoid combining cheese and bananas."
+    ),
+    frozenset({FoodCategory.DAIRY_CHEESE, FoodCategory.FRUIT_MELON}): (
+        5, "Kilata-kharbuja viruddham", "Charaka Samhita Sutrasthana 26:85",
+        "Opposing digestion transit speeds cause violent fermentation.",
+        "Diarrhea, cramps, and fermentation.",
+        "Eat melons alone."
+    ),
+    frozenset({FoodCategory.EGG, FoodCategory.DAIRY_MILK}): (
+        5, "Anda dugdha viruddham", "Charaka Samhita Sutrasthana 26:84",
+        "Heavy animal proteins combined with sweet cooling dairy creates incompatible digestion kinetics.",
+        "Severe sluggishness of Agni, abdominal distension, and toxic Ama.",
+        "Eat eggs and dairy separately."
+    ),
 }
 
 def evaluate_meal(items: List[Tuple[Dravya, float]], is_heated=False, is_night_time=False) -> CompatibilityReport:

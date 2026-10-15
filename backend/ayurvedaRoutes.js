@@ -268,11 +268,16 @@ function createAyurvedaRouter(injectedPool) {
       } catch (microErr) {
         const p1 = (item1.potency || "").toLowerCase();
         const p2 = (item2.potency || "").toLowerCase();
+        const n1 = (item1.name || "").toLowerCase();
+        const n2 = (item2.name || "").toLowerCase();
+        const isFruitWord = (s) => /\b(fruit|apple|apples|banana|mango|melon|orange|lemon|berry|berries|strawberry|pear|peach|grape|papaya)\b/i.test(s);
         const viryaConflict = (p1 === "hot" && p2 === "cold") || (p1 === "cold" && p2 === "hot");
         const dairyNightshade = (item1.is_dairy && item2.is_nightshade) || (item2.is_dairy && item1.is_nightshade);
+        const dairyFruit = (item1.is_dairy && isFruitWord(n2)) || (item2.is_dairy && isFruitWord(n1));
         const warnings = [];
         if (viryaConflict) warnings.push(`Virya conflict between ${item1.name} and ${item2.name}`);
         if (dairyNightshade) warnings.push(`Dairy and nightshade conflict between ${item1.name} and ${item2.name}`);
+        if (dairyFruit) warnings.push(`Sarvāṇi ca phala-kṣīrāṇi viruddhāni (Charaka 26:84): Dairy is incompatible with fruit (${item1.name} and ${item2.name})`);
 
         return res.json({
           compatible: warnings.length === 0,

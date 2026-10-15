@@ -20,6 +20,7 @@ import {
 } from "@/lib/ayurfood";
 
 const SAMPLE_PAIRS = [
+  { a: "Milk", b: "Apple", label: "Milk + Apple (Fruit & Dairy Curdling)" },
   { a: "Milk", b: "Fish", label: "Milk + Fish (Virya Conflict)" },
   { a: "Milk", b: "Melon", label: "Milk + Melon (Digestion Speed)" },
   { a: "Honey", b: "Ghee", label: "Honey + Ghee (Equal Proportions)" },

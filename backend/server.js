@@ -685,6 +685,18 @@ app.post("/api/viruddha-check", async (req, res) => {
   const { foodA = "", foodB = "" } = req.body;
   const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
 
+  const fa = (foodA || "").toLowerCase().trim();
+  const fb = (foodB || "").toLowerCase().trim();
+
+  if (!fa || !fb) {
+    return res.status(400).json({ error: "Please provide both food items to evaluate." });
+  }
+
+  // Canonical Ayurvedic Category Classifiers
+  const isMilk = (s) => /\b(milk|doodh|ksheera|payas|cream)\b/i.test(s) && !/\b(coconut milk|almond milk|soy milk|oat milk)\b/i.test(s);
+  const isDairy = (s) => /\b(milk|dairy|cream|curd|yogurt|dahi|cheese|paneer|doodh|khoya|mawa|lassi|buttermilk)\b/i.test(s) && !/\b(coconut|almond|soy|oat)\b/i.test(s);
+  const isFruit = (s) => /\b(fruit|fruits|apple|apples|banana|bananas|mango|mangoes|melon|melons|watermelon|watermelons|cantaloupe|citrus|orange|oranges|lemon|lemons|lime|limes|grape|grapes|berry|berries|strawberry|strawberries|blueberry|blueberries|blackberry|blackberries|raspberry|raspberries|pear|pears|peach|peaches|plum|plums|cherry|cherries|papaya|papayas|pineapple|pineapples|fig|figs|kiwi|kiwis|pomegranate|pomegranates|guava|guavas|apricot|apricots|dates|khajur)\b/i.test(s);
+
   // Try NumPy AyurFood Compatibility Brain first
   try {
     const controller = new AbortController();
@@ -711,6 +723,30 @@ app.post("/api/viruddha-check", async (req, res) => {
           details: report
         });
       } else if (report.is_compatible) {
+        // Guard against any microservice false-positive on cardinal Samyoga Viruddha (e.g. Milk + Fruit)
+        if ((isMilk(fa) && isFruit(fb)) || (isMilk(fb) && isFruit(fa))) {
+          return res.json({
+            compatible: false,
+            warning: "Viruddha Ahara Incompatibility! Sarvāṇi ca phala-kṣīrāṇi viruddhāni (Charaka Samhita Sutrasthana 26:84 & Astanga Hridaya Sutrasthana 7:39). Classical Ayurveda strictly establishes that milk is incompatible with ALL fruits (including apples, bananas, melons, berries, and citrus). Fruit acids and enzymes curdle milk caseins in the stomach, extinguishing digestive fire (Mandagni) and generating heavy toxic Ama.",
+            details: {
+              ...report,
+              is_compatible: false,
+              compatibility_score: 65,
+              violations: [
+                {
+                  rule_type: "samyoga_viruddha",
+                  severity: 5,
+                  items_involved: [foodA, foodB],
+                  sanskrit_rule: "Sarvāṇi ca phala-kṣīrāṇi viruddhāni (All fruits with milk are incompatible)",
+                  classical_citation: "Charaka Samhita Sutrasthana 26:84 & Astanga Hridaya Sutrasthana 7:39",
+                  pathophysiology: "Fruit enzymes and acids immediately curdle milk caseins in the stomach. The conflicting digestive breakdown extinguishes digestive fire (Mandagni) and generates toxic Ama.",
+                  clinical_consequence: "Sluggish digestion, acid reflux, bloating, respiratory mucus congestion, and systemic skin disorders (Kushtha).",
+                  remediation: "Strictly avoid combining milk with any fruit. Consume fruits solo with a 2-hour separation from dairy."
+                }
+              ]
+            }
+          });
+        }
         return res.json({
           compatible: true,
           message: "These foods are harmonious and compatible under classical Ayurvedic rules.",
@@ -719,11 +755,65 @@ app.post("/api/viruddha-check", async (req, res) => {
       }
     }
   } catch (e) {
-    // Fall through to classical offline pairs
+    // Fall through to classical offline rules
+  }
+
+  // Universal Incompatibility Rules (Charaka Samhita Sutrasthana 26 & Astanga Hridaya 7)
+  if ((isMilk(fa) && isFruit(fb)) || (isMilk(fb) && isFruit(fa))) {
+    return res.json({
+      compatible: false,
+      warning: "Viruddha Ahara Incompatibility! Sarvāṇi ca phala-kṣīrāṇi viruddhāni (Charaka Samhita Sutrasthana 26:84 & Astanga Hridaya Sutrasthana 7:39). Classical Ayurveda establishes that milk is strictly incompatible with ALL fruits (including apples, bananas, melons, berries, and citrus). Fruit acids and enzymes curdle milk caseins in the stomach, extinguishing digestive fire (Mandagni) and generating toxic Ama.",
+      details: {
+        is_compatible: false,
+        compatibility_score: 65,
+        violations: [
+          {
+            rule_type: "samyoga_viruddha",
+            severity: 5,
+            items_involved: [foodA, foodB],
+            sanskrit_rule: "Sarvāṇi ca phala-kṣīrāṇi viruddhāni (All fruits with milk are incompatible)",
+            classical_citation: "Charaka Samhita Sutrasthana 26:84 & Astanga Hridaya Sutrasthana 7:39",
+            pathophysiology: "Fruit enzymes and acids curdle milk caseins in the stomach, extinguishing digestive fire (Mandagni) and generating toxic Ama.",
+            clinical_consequence: "Sluggish digestion, acid reflux, bloating, respiratory mucus congestion, and systemic skin disorders (Kushtha).",
+            remediation: "Strictly avoid combining milk with any fruit. Consume fruits solo with a 2-hour separation from dairy."
+          }
+        ]
+      }
+    });
+  }
+
+  if ((isDairy(fa) && isFruit(fb)) || (isDairy(fb) && isFruit(fa))) {
+    return res.json({
+      compatible: false,
+      warning: "Viruddha Ahara Incompatibility! Dadhi/Kilata phala viruddham (Charaka Samhita Sutrasthana 26:84 & 27:238). Dairy products (curd, yogurt, cheese) paired with fruits cause micro-channel blockage (Srotorodha) while fruit ferments rapidly, producing toxic metabolic sludge (Ama).",
+      details: {
+        is_compatible: false,
+        compatibility_score: 65,
+        violations: [
+          {
+            rule_type: "samyoga_viruddha",
+            severity: 5,
+            items_involved: [foodA, foodB],
+            sanskrit_rule: "Dadhi/Kilata phala viruddham",
+            classical_citation: "Charaka Samhita Sutrasthana 26:84 & 27:238",
+            pathophysiology: "Heavy channel-blocking dairy delays stomach emptying while fruit sugars ferment rapidly.",
+            clinical_consequence: "Gut dysbiosis, bloating, sinus congestion, and toxic Ama accumulation.",
+            remediation: "Avoid combining curd, yogurt, or cheese with fresh fruits."
+          }
+        ]
+      }
+    });
   }
   
   // Comprehensive Classical Viruddha Ahara Knowledge Base
   const pairs = [
+    { a: "milk", b: "apple", reason: "Sarvāṇi ca phala-kṣīrāṇi viruddhāni (Charaka Samhita 26:84). Milk is strictly incompatible with apples and all fruits. Fruit acids and enzymes curdle milk caseins in the stomach, extinguishing digestive fire (Agni) and generating toxic Ama." },
+    { a: "milk", b: "fruit", reason: "Sarvāṇi ca phala-kṣīrāṇi viruddhāni (Charaka Samhita 26:84 & Astanga Hridaya 7:39). All fruits with milk are strictly incompatible." },
+    { a: "milk", b: "mango", reason: "Classical Ayurvedic rule (Charaka 26:84): Sweet fruits like mango with milk suppress Agni, curdle proteins, and generate toxic Ama." },
+    { a: "dairy", b: "fruit", reason: "Classical Ayurvedic rule (Charaka 26:84 & 27:238): Dairy products paired with fruits cause channel blockage (Srotorodha) and rapid fermentation." },
+    { a: "cheese", b: "apple", reason: "Kilata-phala viruddham (Charaka Samhita 27:238). Heavy fermented cheese delays gastric emptying while apple sugars ferment, causing severe bloating and Ama." },
+    { a: "yogurt", b: "apple", reason: "Dadhi-phala viruddham (Charaka Samhita 26:84). Curd/yogurt blocks micro-channels while fresh apple ferments, creating respiratory mucus and metabolic toxins." },
+    { a: "curd", b: "fruit", reason: "Dadhi-phala viruddham (Charaka Samhita 26:84). Blending curd or yogurt with any fruit generates toxic metabolic sludge (Ama)." },
     { a: "milk", b: "fish", reason: "Opposing thermal energies (Virya) — milk is cooling (Sheeta), fish is heating (Ushna). Disturbs blood (Rakta Dhatu) and causes toxic Ama." },
     { a: "milk", b: "banana", reason: "Alters gut flora, dampens digestive fire (Agni), and produces excess mucus/congestion." },
     { a: "milk", b: "citrus", reason: "Acidic fruits (lemon, orange, grapefruit) curdle milk in stomach, causing indigestion and heartburn." },
@@ -742,9 +832,6 @@ app.post("/api/viruddha-check", async (req, res) => {
     { a: "egg", b: "milk", reason: "Heavy animal proteins combined with dairy overwhelm the digestive Agni." },
     { a: "fish", b: "yogurt", reason: "Heating fish with heavy channel-blocking curd generates severe toxins." },
   ];
-
-  const fa = foodA.toLowerCase().trim();
-  const fb = foodB.toLowerCase().trim();
 
   const found = pairs.find(
     (p) => (fa.includes(p.a) && fb.includes(p.b)) || (fa.includes(p.b) && fb.includes(p.a))
