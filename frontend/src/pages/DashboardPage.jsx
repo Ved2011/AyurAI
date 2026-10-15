@@ -6,6 +6,7 @@ import AuthModal from "@/components/auth/AuthModal";
 import {
   Sparkles, Clock, Utensils, History,
   ArrowRight, Activity, TrendingUp, CalendarDays,
+  Sun, Flower2, Flame, Moon, HeartPulse, BookOpen,
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 
@@ -49,6 +50,49 @@ const QUICK_LINKS = [
     desc: "Review all your saved Prakriti and Vikriti assessments.",
     icon: History,
     dark: false,
+  },
+];
+
+const CLASSICAL_MODULES = [
+  {
+    to: "/ritucharya",
+    tag: "Charaka Sutra 6",
+    title: "Ritucharya (ऋतुचर्या)",
+    desc: "Seasonal living, dietetics (Pathya/Apathya), and dosha transitions across the 6 Ritus.",
+    icon: Sun,
+    accent: "#3E6B4A",
+  },
+  {
+    to: "/dravya-guna",
+    tag: "Bhavaprakasha",
+    title: "Dravya Guna (द्रव्यगुण)",
+    desc: "Classical herbology: 5 dimensions (Rasa, Guna, Virya, Vipaka, Prabhava).",
+    icon: Flower2,
+    accent: "#C8A96A",
+  },
+  {
+    to: "/agni-ama",
+    tag: "Astanga Nidana 12",
+    title: "Agni & Ama Pariksha",
+    desc: "Evaluate metabolic fire (Sama/Visham/Tikshna/Manda) and measure Ama toxicity %.",
+    icon: Flame,
+    accent: "#C05540",
+  },
+  {
+    to: "/nidra",
+    tag: "Trayopasthambha",
+    title: "Nidra Vidhi (निद्रा विधि)",
+    desc: "Circadian sleep cycles, Kapha Kaala alignment, and Ojas restoration planner.",
+    icon: Moon,
+    accent: "#263D30",
+  },
+  {
+    to: "/remedies",
+    tag: "Bhaishajya Ratnavali",
+    title: "Gharelu Upachar",
+    desc: "Classical kitchen home remedies for hyperacidity, cough, joints, and bloating.",
+    icon: HeartPulse,
+    accent: "#8B2C19",
   },
 ];
 
@@ -203,6 +247,60 @@ export default function DashboardPage() {
                 </span>
               </Link>
             ))}
+          </div>
+
+          {/* ── Classical Samhita Modules (शास्त्रोक्त प्रज्ञा) ── */}
+          <div className="mt-12">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-[#3E6B4A] block mb-0.5">
+                  Classical Literature Grounding
+                </span>
+                <h3 className="font-display text-2xl font-bold text-[#1A2620]">
+                  Ayurvedic Samhita Modules (शास्त्रोक्त प्रज्ञा)
+                </h3>
+              </div>
+              <span className="text-xs text-[#5A6960] hidden sm:block">
+                Charaka • Sushruta • Astanga Hridaya • Bhavaprakasha
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {CLASSICAL_MODULES.map(({ to, tag, title, desc, icon: Icon, accent }, i) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="group p-5 rounded-3xl bg-white border border-[#DFE1DB] hover:border-[#3E6B4A]/50 transition-all hover:-translate-y-1 hover:shadow-lg duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span
+                        className="text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: `${accent}15`, color: accent }}
+                      >
+                        {tag}
+                      </span>
+                      <span
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                        style={{ background: `${accent}15`, color: accent }}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </span>
+                    </div>
+                    <h4 className="font-display text-xl font-bold text-[#1A2620] mb-1 group-hover:text-[#3E6B4A] transition-colors">
+                      {title}
+                    </h4>
+                    <p className="text-xs text-[#5A6960] leading-relaxed line-clamp-2">
+                      {desc}
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-[#DFE1DB]/60 flex items-center justify-between text-xs font-semibold text-[#3E6B4A]">
+                    <span>Explore Module</span>
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </main>

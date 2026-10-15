@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   Sparkles, Clock, Utensils, ArrowRight, Leaf,
-  Activity, LogIn, UserPlus, BookOpen, ShieldCheck, ChevronDown
+  Activity, LogIn, UserPlus, BookOpen, ShieldCheck, ChevronDown,
+  Sun, Flower2, Flame, Moon, HeartPulse
 } from "lucide-react";
 
 const FEATURES = [
@@ -14,20 +15,60 @@ const FEATURES = [
     desc: "Differentiates your lifelong genetic baseline (Prakriti) from acute active imbalances (Vikriti) with multi-dosha percentages.",
   },
   {
-    icon: Clock,
-    accent: "#3E6B4A",
-    bg: "rgba(62,107,74,0.08)",
-    tag: "Daily Rhythm",
-    title: "Dinacharya Daily Planner",
-    desc: "Hour-by-hour daily schedules personalized to align your body clock with natural dosha cycles for optimal Agni.",
-  },
-  {
     icon: Utensils,
     accent: "#C05540",
     bg: "rgba(192,85,64,0.08)",
     tag: "Food Intelligence",
     title: "Viruddha Ahara Checker",
-    desc: "Classical rule engine for incompatible food combinations to prevent digestive toxin buildup (Ama).",
+    desc: "Classical rule engine grounded in Open Food Facts and Charaka Samhita 26 for incompatible food combinations.",
+  },
+  {
+    icon: Sun,
+    accent: "#3E6B4A",
+    bg: "rgba(62,107,74,0.08)",
+    tag: "Charaka Sutra 6",
+    title: "Ritucharya (Seasonal Living)",
+    desc: "Align your diet (Ahara) and lifestyle (Vihara) across the 6 classical seasons to avert seasonal dosha spikes.",
+  },
+  {
+    icon: Flower2,
+    accent: "#C8A96A",
+    bg: "rgba(200,169,106,0.08)",
+    tag: "Bhavaprakasha",
+    title: "Dravya Guna Pharmacopeia",
+    desc: "Explore botanical herbs through their 5 classical dimensions: Rasa, Guna, Virya, Vipaka, and Prabhava.",
+  },
+  {
+    icon: Flame,
+    accent: "#C05540",
+    bg: "rgba(192,85,64,0.08)",
+    tag: "Astanga Nidana 12",
+    title: "Agni & Ama Pariksha",
+    desc: "Diagnostic assessment of your metabolic digestive fire (Sama/Visham/Tikshna/Manda) and systemic Ama endotoxin level.",
+  },
+  {
+    icon: Moon,
+    accent: "#263D30",
+    bg: "rgba(38,61,48,0.08)",
+    tag: "Trayopasthambha",
+    title: "Nidra Vidhi (Sleep Planner)",
+    desc: "Synchronize sleep with 4-hour biological dosha clocks, Kapha Kaala alignment, and Ojas restoration.",
+  },
+  {
+    icon: HeartPulse,
+    accent: "#8B2C19",
+    bg: "rgba(139,44,25,0.08)",
+    tag: "Bhaishajya Ratnavali",
+    title: "Gharelu Upachar Cabinet",
+    desc: "Authentic kitchen remedies with exact preparation methods for acidity, cough, joint stiffness, and bloating.",
+  },
+  {
+    icon: Clock,
+    accent: "#3E6B4A",
+    bg: "rgba(62,107,74,0.08)",
+    tag: "Daily Rhythm",
+    title: "Dinacharya Daily Planner",
+    desc: "Hour-by-hour daily schedules personalized to align your body clock with natural dosha cycles for optimal vitality.",
   },
 ];
 

@@ -758,6 +758,15 @@ app.post("/api/viruddha-check", (req, res) => {
 const createAyurvedaRouter = require("./ayurvedaRoutes");
 app.use("/api/ayurveda", createAyurvedaRouter(pgPool));
 
+// ---------- Classical Ayurveda Features Engine (Ritucharya, Dravya Guna, Agni-Ama, Nidra, Remedies) ----------
+const classicalRoutes = require("./routes/classicalRoutes");
+app.use("/api/classical", classicalRoutes);
+app.use("/api/ritucharya", (req, res, next) => { req.url = "/ritucharya" + req.url; classicalRoutes(req, res, next); });
+app.use("/api/dravya-guna", (req, res, next) => { req.url = "/dravya-guna" + req.url; classicalRoutes(req, res, next); });
+app.use("/api/agni-ama", (req, res, next) => { req.url = "/agni-ama" + req.url; classicalRoutes(req, res, next); });
+app.use("/api/nidra", (req, res, next) => { req.url = "/nidra" + req.url; classicalRoutes(req, res, next); });
+app.use("/api/remedies", (req, res, next) => { req.url = "/remedies" + req.url; classicalRoutes(req, res, next); });
+
 // ---------- Serve Frontend Static Files & React SPA Fallback ----------
 const reactBuildPath = path.join(__dirname, "../frontend/build");
 const publicPath = path.join(__dirname, "public");

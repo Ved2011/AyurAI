@@ -13,13 +13,23 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Flower2,
+  Flame,
+  Moon,
+  HeartPulse,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { path: "/dashboard",    label: "Dashboard",          icon: LayoutDashboard },
   { path: "/analyze",      label: "Dosha Diagnostic",   icon: Sparkles },
-  { path: "/routine",      label: "Dinacharya",         icon: Clock },
+  { path: "/routine",      label: "Dinacharya Routine", icon: Clock },
   { path: "/food-checker", label: "Food Compatibility", icon: Utensils },
+  { path: "/ritucharya",   label: "Ritucharya (Seasons)", icon: Sun },
+  { path: "/dravya-guna",  label: "Dravya Guna (Herbs)", icon: Flower2 },
+  { path: "/agni-ama",     label: "Agni & Ama Pariksha", icon: Flame },
+  { path: "/nidra",        label: "Nidra (Sleep Vidhi)", icon: Moon },
+  { path: "/remedies",     label: "Gharelu Upachar",     icon: HeartPulse },
   { path: "/history",      label: "Health History",     icon: History },
   { path: "/about",        label: "Ayurvedic Knowledge",icon: BookOpen },
 ];

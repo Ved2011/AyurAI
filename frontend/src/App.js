@@ -9,6 +9,11 @@ import RoutinePage from "@/pages/RoutinePage";
 import FoodCheckerPage from "@/pages/FoodCheckerPage";
 import HistoryPage from "@/pages/HistoryPage";
 import AboutPage from "@/pages/AboutPage";
+import RitucharyaPage from "@/pages/RitucharyaPage";
+import DravyaGunaPage from "@/pages/DravyaGunaPage";
+import AgniAmaPage from "@/pages/AgniAmaPage";
+import NidraPage from "@/pages/NidraPage";
+import RemediesPage from "@/pages/RemediesPage";
 import AuthModal from "@/components/auth/AuthModal";
 
 function App() {
@@ -38,6 +43,11 @@ function App() {
           <Route path="/analyze" element={<AyurAI />} />
           <Route path="/routine" element={<RoutinePage />} />
           <Route path="/food-checker" element={<FoodCheckerPage />} />
+          <Route path="/ritucharya" element={<RitucharyaPage />} />
+          <Route path="/dravya-guna" element={<DravyaGunaPage />} />
+          <Route path="/agni-ama" element={<AgniAmaPage />} />
+          <Route path="/nidra" element={<NidraPage />} />
+          <Route path="/remedies" element={<RemediesPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
