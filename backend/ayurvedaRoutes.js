@@ -1,11 +1,43 @@
 const express = require("express");
 const http = require("http");
+const { spawn } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 const { Pool } = require("pg");
 
-const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8000";
+const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
 
-// HTTP Agent with keep-alive for low-latency microservice requests
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
+// Auto-check and auto-spawn the Python NumPy Brain if not already running
+function autoEnsureBrainOnline() {
+  const checkUrl = `${AYURFOOD_SERVICE_URL}/api/v1/health`;
+  fetch(checkUrl)
+    .then((r) => {
+      if (r.ok) console.log("🌿 [AyurFood Engine] Python NumPy Brain is verified online at " + AYURFOOD_SERVICE_URL);
+    })
+    .catch(() => {
+      const candidates = [
+        path.join(__dirname, "..", "ayurfood_api_server.py"),
+        path.join(__dirname, "ayurfood_api_server.py"),
+      ];
+      const target = candidates.find((p) => fs.existsSync(p));
+      if (target) {
+        try {
+          const brain = spawn("python3", [target], {
+            env: { ...process.env, PORT: "8001", PYTHONUNBUFFERED: "1" },
+            stdio: "ignore",
+            detached: true,
+          });
+          brain.unref();
+          console.log(`🚀 [AyurFood Engine] Auto-launched background Python matrix brain on port 8001 (PID: ${brain.pid})`);
+        } catch (e) {
+          console.warn("⚠️ Could not auto-spawn AyurFood Python engine:", e.message);
+        }
+      }
+    });
+}
+
+// Trigger auto-check on module load
+autoEnsureBrainOnline();
 
 /**
  * Creates and returns the Ayurveda Compatibility Express Router
@@ -234,7 +266,6 @@ function createAyurvedaRouter(injectedPool) {
           full_report: report,
         });
       } catch (microErr) {
-        // In-memory fallback if microservice is temporarily down
         const p1 = (item1.potency || "").toLowerCase();
         const p2 = (item2.potency || "").toLowerCase();
         const viryaConflict = (p1 === "hot" && p2 === "cold") || (p1 === "cold" && p2 === "hot");

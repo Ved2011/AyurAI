@@ -469,5 +469,7 @@ app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting AyurFood API on http://0.0.0.0:8000 ...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    port = int(os.environ.get("AYURFOOD_PORT", os.environ.get("PORT", 8001)))
+    print(f"Starting AyurFood API on http://0.0.0.0:{port} ...")
+    uvicorn.run(app, host="0.0.0.0", port=port)
