@@ -683,7 +683,7 @@ app.delete("/api/history/:id", async (req, res) => {
 // ---------- Feature 11: Incompatible Food (Viruddha Ahara) Checker ----------
 app.post("/api/viruddha-check", async (req, res) => {
   const { foodA = "", foodB = "" } = req.body;
-  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8000";
+  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
 
   // Try NumPy AyurFood Compatibility Brain first
   try {
@@ -754,6 +754,59 @@ app.post("/api/viruddha-check", async (req, res) => {
     res.json({ compatible: false, warning: `Viruddha Ahara Incompatibility! ${found.reason}` });
   } else {
     res.json({ compatible: true, message: "These foods are generally compatible under classical Ayurvedic rules." });
+  }
+});
+
+// ---------- AyurFood Compatibility Brain Gateway Routes ----------
+app.get("/api/ayurfood/product/:barcode", async (req, res) => {
+  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
+  try {
+    const fRes = await fetch(`${AYURFOOD_SERVICE_URL}/api/v1/compatibility/product/${req.params.barcode}`);
+    if (!fRes.ok) return res.status(fRes.status).json({ error: "Product lookup failed" });
+    const data = await fRes.json();
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ error: "AyurFood microservice unavailable", details: err.message });
+  }
+});
+
+app.post("/api/ayurfood/evaluate", async (req, res) => {
+  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
+  try {
+    const fRes = await fetch(`${AYURFOOD_SERVICE_URL}/api/v1/compatibility/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+    const data = await fRes.json();
+    res.status(fRes.status).json(data);
+  } catch (err) {
+    res.status(503).json({ error: "AyurFood microservice unavailable", details: err.message });
+  }
+});
+
+app.post("/api/ayurfood/benchmark", async (req, res) => {
+  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
+  const count = req.query.total || 100000;
+  try {
+    const fRes = await fetch(`${AYURFOOD_SERVICE_URL}/api/v1/combinations/benchmark?total=${count}`, {
+      method: "POST"
+    });
+    const data = await fRes.json();
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ error: "AyurFood microservice unavailable", details: err.message });
+  }
+});
+
+app.get("/api/ayurfood/health", async (req, res) => {
+  const AYURFOOD_SERVICE_URL = process.env.AYURFOOD_SERVICE_URL || "http://127.0.0.1:8001";
+  try {
+    const fRes = await fetch(`${AYURFOOD_SERVICE_URL}/api/v1/health`);
+    const data = await fRes.json();
+    res.json({ gateway: "connected", ayurfood_service: data });
+  } catch (err) {
+    res.status(503).json({ gateway: "fallback_mode", error: "AyurFood microservice offline", details: err.message });
   }
 });
 
